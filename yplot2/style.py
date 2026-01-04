@@ -1,5 +1,7 @@
 """
 Publication-quality styling utilities for matplotlib axes.
+
+All functions use global config defaults when parameters aren't specified.
 """
 
 from typing import Optional, List
@@ -8,36 +10,47 @@ import matplotlib.lines as mlines
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+from .config import get_config
+
 
 def publication_style(
     ax: Axes,
-    fontsize: int = 8,
-    xtick_fontsize: Optional[int] = None,
-    ytick_fontsize: Optional[int] = None,
-    fontname: str = "Arial",
-    linewidth: float = 0.75,
-    tick_width: float = 0.75,
-    tick_size: float = 2.0,
-    tick_pad: float = 1.0,
+    fontsize: Optional[float] = None,
+    xtick_fontsize: Optional[float] = None,
+    ytick_fontsize: Optional[float] = None,
+    fontname: Optional[str] = None,
+    linewidth: Optional[float] = None,
+    tick_width: Optional[float] = None,
+    tick_size: Optional[float] = None,
+    tick_pad: Optional[float] = None,
 ) -> None:
     """
     Apply publication-quality styling to an axes.
 
+    Uses global config defaults for any unspecified parameters.
+
     Args:
         ax: Axes object to style
         fontsize: Font size for labels and title
-        xtick_fontsize: Font size for x-tick labels (default: fontsize - 2)
-        ytick_fontsize: Font size for y-tick labels (default: fontsize - 2)
+        xtick_fontsize: Font size for x-tick labels
+        ytick_fontsize: Font size for y-tick labels
         fontname: Font family name
         linewidth: Width of axis spines
         tick_width: Width of tick marks
         tick_size: Length of tick marks
         tick_pad: Padding between ticks and labels
     """
-    if xtick_fontsize is None:
-        xtick_fontsize = fontsize - 2
-    if ytick_fontsize is None:
-        ytick_fontsize = fontsize - 2
+    cfg = get_config()
+
+    # Use config defaults for unspecified values
+    fontsize = fontsize if fontsize is not None else cfg.fontsize
+    fontname = fontname if fontname is not None else cfg.fontname
+    linewidth = linewidth if linewidth is not None else cfg.linewidth
+    tick_width = tick_width if tick_width is not None else cfg.tick_width
+    tick_size = tick_size if tick_size is not None else cfg.tick_size
+    tick_pad = tick_pad if tick_pad is not None else cfg.tick_pad
+    xtick_fontsize = xtick_fontsize if xtick_fontsize is not None else cfg.tick_fontsize
+    ytick_fontsize = ytick_fontsize if ytick_fontsize is not None else cfg.tick_fontsize
 
     # Set spine line widths
     for spine in ax.spines.values():
@@ -100,14 +113,16 @@ def add_legend(
     labels: List[str],
     colors: Optional[List[str]] = None,
     loc: str = "upper right",
-    fontsize: int = 6,
-    fontname: str = "Arial",
-    frameon: bool = False,
-    linewidth: float = 0.75,
+    fontsize: Optional[float] = None,
+    fontname: Optional[str] = None,
+    frameon: Optional[bool] = None,
+    linewidth: Optional[float] = None,
     **kwargs,
 ):
     """
     Add a styled legend to an axes.
+
+    Uses global config defaults for any unspecified parameters.
 
     Args:
         ax: Axes object
@@ -123,6 +138,13 @@ def add_legend(
     Returns:
         Legend object
     """
+    cfg = get_config()
+
+    fontsize = fontsize if fontsize is not None else cfg.legend_fontsize
+    fontname = fontname if fontname is not None else cfg.fontname
+    frameon = frameon if frameon is not None else cfg.legend_frameon
+    linewidth = linewidth if linewidth is not None else cfg.linewidth
+
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
@@ -137,12 +159,12 @@ def add_legend(
         handles=handles,
         frameon=frameon,
         loc=loc,
-        handlelength=1.0,
+        handlelength=cfg.legend_handlelength,
         handleheight=0.5,
         handletextpad=0.30,
         borderaxespad=-0.10,
         prop=font_props,
-        labelspacing=0.15,
+        labelspacing=cfg.legend_labelspacing,
         **kwargs,
     )
 
@@ -153,7 +175,7 @@ def scatter(
     ax: Axes,
     x,
     y,
-    s: float = 150,
+    s: Optional[float] = None,
     **kwargs,
 ):
     """
@@ -169,6 +191,8 @@ def scatter(
     Returns:
         PathCollection from scatter
     """
+    cfg = get_config()
+    s = s if s is not None else cfg.markersize ** 2  # scatter uses area
     return ax.scatter(x, y, s=s, **kwargs)
 
 
@@ -176,8 +200,8 @@ def line(
     ax: Axes,
     x,
     y,
-    linewidth: float = 2,
-    markersize: float = 10,
+    linewidth: Optional[float] = None,
+    markersize: Optional[float] = None,
     **kwargs,
 ):
     """
@@ -194,4 +218,7 @@ def line(
     Returns:
         List of Line2D objects
     """
+    cfg = get_config()
+    linewidth = linewidth if linewidth is not None else cfg.plot_linewidth
+    markersize = markersize if markersize is not None else cfg.markersize
     return ax.plot(x, y, lw=linewidth, markersize=markersize, **kwargs)

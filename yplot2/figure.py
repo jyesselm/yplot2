@@ -10,6 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
 from .coordinates import Coord
+from .config import get_config
 
 
 def create_figure(
@@ -83,13 +84,15 @@ def add_labels(
     coords: List[Coord],
     fig_size: Tuple[float, float],
     start: str = "A",
-    fontsize: int = 12,
-    fontweight: str = "bold",
-    fontname: str = "Arial",
-    offset: Tuple[float, float] = (-0.4, 0.15),
+    fontsize: Optional[float] = None,
+    fontweight: Optional[str] = None,
+    fontname: Optional[str] = None,
+    offset: Optional[Tuple[float, float]] = None,
 ) -> None:
     """
     Add panel labels (A, B, C, ...) to subplots.
+
+    Uses global config defaults for any unspecified parameters.
 
     Args:
         fig: Figure object
@@ -101,6 +104,13 @@ def add_labels(
         fontname: Font family name
         offset: (dx, dy) offset from top-left corner in inches
     """
+    cfg = get_config()
+
+    fontsize = fontsize if fontsize is not None else cfg.panel_label_fontsize
+    fontweight = fontweight if fontweight is not None else cfg.panel_label_weight
+    fontname = fontname if fontname is not None else cfg.fontname
+    offset = offset if offset is not None else cfg.panel_label_offset
+
     fig_width, fig_height = fig_size
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     if start.upper() in letters:

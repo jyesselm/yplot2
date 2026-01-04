@@ -29,6 +29,16 @@ Example usage:
 
 __version__ = "0.1.0"
 
+# Configuration
+from .config import (
+    Config,
+    get_config,
+    set_config,
+    reset_config,
+    use_preset,
+    list_presets,
+)
+
 # Core coordinate type
 from .coordinates import Coord
 
@@ -90,6 +100,13 @@ from .style import (
 __all__ = [
     # Version
     "__version__",
+    # Config
+    "Config",
+    "get_config",
+    "set_config",
+    "reset_config",
+    "use_preset",
+    "list_presets",
     # Core type
     "Coord",
     # Generators
