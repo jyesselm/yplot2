@@ -106,6 +106,7 @@ from .style import (
 
 # Plot functions (use global config)
 from .plots import (
+    # Basic plots
     scatter,
     line,
     bar,
@@ -117,6 +118,16 @@ from .plots import (
     hline,
     vline,
     text,
+    # Specialized plots
+    lollipop,
+    plot_pop_avg,
+    plot_pop_avg_from_row,
+    plot_pop_avg_diff_from_rows,
+    plot_pop_avg_all,
+    plot_pop_avg_traces,
+    # Color utilities
+    colors_for_sequence,
+    NUCLEOTIDE_COLORS,
 )
 
 __all__ = [
@@ -180,7 +191,7 @@ __all__ = [
     "set_xlabel",
     "set_ylabel",
     "set_title",
-    # Plot functions
+    # Basic plot functions
     "scatter",
     "line",
     "bar",
@@ -192,4 +203,14 @@ __all__ = [
     "hline",
     "vline",
     "text",
+    # Specialized plots
+    "lollipop",
+    "plot_pop_avg",
+    "plot_pop_avg_from_row",
+    "plot_pop_avg_diff_from_rows",
+    "plot_pop_avg_all",
+    "plot_pop_avg_traces",
+    # Color utilities
+    "colors_for_sequence",
+    "NUCLEOTIDE_COLORS",
 ]
