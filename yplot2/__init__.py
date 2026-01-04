@@ -34,7 +34,10 @@ from .config import (
     Config,
     get_config,
     set_config,
+    get_config_value,
+    list_config_options,
     reset_config,
+    print_config,
     use_preset,
     list_presets,
 )
@@ -70,6 +73,8 @@ from .spacing import (
 # Figure creation and utilities
 from .figure import (
     create_figure,
+    get_image_size,
+    coord_from_image,
     load_image,
     make_image_panel,
     add_labels,
@@ -89,10 +94,14 @@ from .axes import (
 
 # Styling
 from .style import (
-    publication_style,
+    apply_style,
     apply_style_to_all,
+    publication_style,  # alias for apply_style
     remove_spines,
     add_legend,
+    set_xlabel,
+    set_ylabel,
+    set_title,
 )
 
 # Plot functions (use global config)
@@ -117,7 +126,10 @@ __all__ = [
     "Config",
     "get_config",
     "set_config",
+    "get_config_value",
+    "list_config_options",
     "reset_config",
+    "print_config",
     "use_preset",
     "list_presets",
     # Core type
@@ -145,6 +157,8 @@ __all__ = [
     "suggest_figure_size",
     # Figure
     "create_figure",
+    "get_image_size",
+    "coord_from_image",
     "load_image",
     "make_image_panel",
     "add_labels",
@@ -158,10 +172,14 @@ __all__ = [
     "add_shared_ylabel",
     "group_grid",
     # Style
-    "publication_style",
+    "apply_style",
     "apply_style_to_all",
+    "publication_style",
     "remove_spines",
     "add_legend",
+    "set_xlabel",
+    "set_ylabel",
+    "set_title",
     # Plot functions
     "scatter",
     "line",

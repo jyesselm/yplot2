@@ -131,11 +131,11 @@ Set style defaults once, apply everywhere:
 ```python
 # Set individual parameters
 yp.set_config(
-    fontname="Arial",
-    fontsize=8,
-    tick_fontsize=6,
-    linewidth=0.75,
-    markersize=4,
+    font_family="Arial",
+    axis_label_fontsize=8,
+    axis_tick_fontsize=6,
+    axis_linewidth=0.75,
+    plot_markersize=4,
     plot_linewidth=1.5,
 )
 
@@ -147,7 +147,7 @@ yp.use_preset("minimal")      # Very thin lines
 
 # View current config
 cfg = yp.get_config()
-print(cfg.fontname, cfg.fontsize)
+print(cfg.font_family, cfg.axis_label_fontsize)
 
 # Reset to defaults
 yp.reset_config()
@@ -157,17 +157,37 @@ yp.reset_config()
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `fontname` | "Arial" | Font family for all text |
-| `fontsize` | 8 | Axis labels, titles |
-| `tick_fontsize` | 6 | Tick labels |
-| `legend_fontsize` | 6 | Legend text |
-| `panel_label_fontsize` | 12 | A, B, C panel labels |
-| `linewidth` | 0.75 | Axis spines |
-| `tick_width` | 0.75 | Tick marks |
-| `tick_size` | 2.0 | Tick length |
-| `tick_pad` | 1.0 | Tick to label padding |
-| `plot_linewidth` | 1.5 | Data lines |
-| `markersize` | 4 | Data markers |
+| **Font** | | |
+| `font_family` | "Arial" | Font family for all text |
+| **Axis** | | |
+| `axis_linewidth` | 0.75 | Axis spine line width |
+| `axis_tick_width` | 0.75 | Tick mark width |
+| `axis_tick_length` | 2.0 | Tick mark length |
+| `axis_tick_pad` | 1.0 | Tick to label padding |
+| `axis_tick_fontsize` | 6 | Tick label font size |
+| `axis_tick_direction` | "out" | Tick direction ("in", "out", "inout") |
+| `axis_label_fontsize` | 8 | X/Y axis label font size |
+| `axis_label_pad` | 2.0 | Axis label padding |
+| `axis_title_fontsize` | 8 | Axis title font size |
+| `axis_title_pad` | 4.0 | Axis title padding |
+| **Plot** | | |
+| `plot_linewidth` | 1.5 | Data line width |
+| `plot_markersize` | 4 | Data marker size |
+| `plot_capsize` | 3.0 | Error bar cap size |
+| `plot_capthick` | 0.75 | Error bar cap thickness |
+| **Legend** | | |
+| `legend_fontsize` | 6 | Legend text size |
+| `legend_frameon` | False | Draw legend frame |
+| `legend_handlelength` | 1.0 | Legend handle length |
+| `legend_labelspacing` | 0.15 | Legend entry spacing |
+| **Panel Labels** | | |
+| `panel_label_fontsize` | 12 | A, B, C label size |
+| `panel_label_fontweight` | "bold" | A, B, C label weight |
+| `panel_label_offset` | (-0.4, 0.15) | Label offset (dx, dy) inches |
+| **Colorbar** | | |
+| `colorbar_width` | 0.1 | Colorbar width (inches) |
+| `colorbar_pad` | 0.05 | Colorbar padding (inches) |
+| `colorbar_tick_fontsize` | 6 | Colorbar tick font size |
 
 ## Plot Functions
 
@@ -213,7 +233,7 @@ yp.text(ax, 0.5, 0.5, "Label", fontsize=10)
 yp.apply_style_to_all(axes)
 
 # Or individual axes with overrides
-yp.publication_style(ax, fontsize=10, linewidth=1.0)
+yp.apply_style(ax, axis_label_fontsize=10, axis_linewidth=1.0)
 
 # Remove spines
 yp.remove_spines(ax, ['top', 'right'])
@@ -253,8 +273,20 @@ yp.group_grid(
 For figures with molecular structures, schematics, etc:
 
 ```python
+# Create panel matching exact image dimensions (no distortion)
+a = yp.coord_from_image("structure.png", left=0.5, bottom=3.0, dpi=300)
+
+# Scale image to 50% of original size
+b = yp.coord_from_image("structure.png", left=0.5, bottom=1.0, scale=0.5)
+
+# Get image size in inches
+width, height = yp.get_image_size("structure.png", dpi=300)
+
 # Load image (fills panel edge-to-edge)
 yp.load_image(axes[0], "structure.png")
+
+# Load with aspect ratio check (warns if panel doesn't match image)
+yp.load_image(axes[0], "structure.png", coord=a)
 
 # Prepare panel for custom edge-to-edge content
 yp.make_image_panel(axes[1])
@@ -371,7 +403,9 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 
 ### Figure
 - `create_figure(size, coords)` - Create figure with axes
-- `load_image(ax, path)` - Load image into panel
+- `get_image_size(path, dpi)` - Get image dimensions in inches
+- `coord_from_image(path, left, bottom, dpi, scale)` - Create Coord matching image size
+- `load_image(ax, path, coord)` - Load image into panel (warns if aspect ratio differs)
 - `make_image_panel(ax)` - Prepare for edge-to-edge content
 - `add_labels(fig, coords, fig_size, start)` - Add panel labels
 - `draw_debug_boxes(fig, coords, fig_size)` - Debug visualization

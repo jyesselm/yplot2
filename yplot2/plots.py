@@ -28,7 +28,7 @@ def scatter(
     Args:
         ax: Axes object
         x, y: Data coordinates
-        s: Marker size (default: config.markersize ** 2)
+        s: Marker size (default: config.plot_markersize ** 2)
         c: Color
         marker: Marker style
         edgecolors: Edge color
@@ -41,9 +41,9 @@ def scatter(
     cfg = get_config()
 
     if s is None:
-        s = cfg.markersize ** 2  # scatter uses area
+        s = cfg.plot_markersize ** 2  # scatter uses area
     if linewidths is None:
-        linewidths = cfg.linewidth * 0.5
+        linewidths = cfg.axis_linewidth * 0.5
 
     return ax.scatter(x, y, s=s, c=c, marker=marker,
                       edgecolors=edgecolors, linewidths=linewidths, **kwargs)
@@ -64,7 +64,7 @@ def line(
         ax: Axes object
         x, y: Data coordinates
         linewidth: Line width (default: config.plot_linewidth)
-        markersize: Marker size (default: config.markersize)
+        markersize: Marker size (default: config.plot_markersize)
         **kwargs: Additional args to ax.plot()
 
     Returns:
@@ -75,7 +75,7 @@ def line(
     if linewidth is None:
         linewidth = cfg.plot_linewidth
     if markersize is None:
-        markersize = cfg.markersize
+        markersize = cfg.plot_markersize
 
     return ax.plot(x, y, linewidth=linewidth, markersize=markersize, **kwargs)
 
@@ -98,7 +98,7 @@ def bar(
         height: Bar heights
         width: Bar width
         edgecolor: Edge color (default: None)
-        linewidth: Edge line width (default: config.linewidth)
+        linewidth: Edge line width (default: config.axis_linewidth)
         **kwargs: Additional args to ax.bar()
 
     Returns:
@@ -107,7 +107,7 @@ def bar(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth
+        linewidth = cfg.axis_linewidth
 
     return ax.bar(x, height, width=width, edgecolor=edgecolor,
                   linewidth=linewidth, **kwargs)
@@ -131,7 +131,7 @@ def barh(
         width: Bar widths (the data values)
         height: Bar height
         edgecolor: Edge color
-        linewidth: Edge line width (default: config.linewidth)
+        linewidth: Edge line width (default: config.axis_linewidth)
         **kwargs: Additional args to ax.barh()
 
     Returns:
@@ -140,7 +140,7 @@ def barh(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth
+        linewidth = cfg.axis_linewidth
 
     return ax.barh(y, width, height=height, edgecolor=edgecolor,
                    linewidth=linewidth, **kwargs)
@@ -171,7 +171,7 @@ def errorbar(
         fmt: Format string (default: 'o')
         linewidth: Line width
         markersize: Marker size
-        capsize: Error bar cap size (default: config.markersize)
+        capsize: Error bar cap size
         capthick: Cap line thickness
         elinewidth: Error line width
         **kwargs: Additional args to ax.errorbar()
@@ -184,13 +184,13 @@ def errorbar(
     if linewidth is None:
         linewidth = cfg.plot_linewidth
     if markersize is None:
-        markersize = cfg.markersize
+        markersize = cfg.plot_markersize
     if capsize is None:
-        capsize = cfg.markersize * 0.75
+        capsize = cfg.plot_capsize
     if capthick is None:
-        capthick = cfg.linewidth
+        capthick = cfg.plot_capthick
     if elinewidth is None:
-        elinewidth = cfg.linewidth
+        elinewidth = cfg.axis_linewidth
 
     return ax.errorbar(x, y, yerr=yerr, xerr=xerr, fmt=fmt,
                        linewidth=linewidth, markersize=markersize,
@@ -255,7 +255,7 @@ def hist(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth * 0.5
+        linewidth = cfg.axis_linewidth * 0.5
 
     return ax.hist(x, bins=bins, edgecolor=edgecolor, linewidth=linewidth, **kwargs)
 
@@ -283,9 +283,9 @@ def boxplot(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth
+        linewidth = cfg.axis_linewidth
     if fliersize is None:
-        fliersize = cfg.markersize
+        fliersize = cfg.plot_markersize
 
     # Set box properties
     boxprops = kwargs.pop('boxprops', {})
@@ -333,7 +333,7 @@ def hline(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth
+        linewidth = cfg.plot_linewidth
 
     return ax.axhline(y, linewidth=linewidth, linestyle=linestyle,
                       color=color, **kwargs)
@@ -364,7 +364,7 @@ def vline(
     cfg = get_config()
 
     if linewidth is None:
-        linewidth = cfg.linewidth
+        linewidth = cfg.plot_linewidth
 
     return ax.axvline(x, linewidth=linewidth, linestyle=linestyle,
                       color=color, **kwargs)
@@ -396,8 +396,8 @@ def text(
     cfg = get_config()
 
     if fontsize is None:
-        fontsize = cfg.fontsize
+        fontsize = cfg.axis_label_fontsize
     if fontname is None:
-        fontname = cfg.fontname
+        fontname = cfg.font_family
 
     return ax.text(x, y, s, fontsize=fontsize, fontname=fontname, **kwargs)

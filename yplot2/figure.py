@@ -3,6 +3,7 @@ Figure creation and rendering utilities.
 """
 
 from typing import List, Optional, Tuple, Union
+import warnings
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.image as mpimg
@@ -11,6 +12,66 @@ from matplotlib.axes import Axes
 
 from .coordinates import Coord
 from .config import get_config
+
+
+def get_image_size(image_path: str, dpi: float = 300) -> Tuple[float, float]:
+    """
+    Get image dimensions in inches.
+
+    Args:
+        image_path: Path to image file
+        dpi: DPI to use for conversion (default: 300)
+
+    Returns:
+        (width, height) in inches
+    """
+    try:
+        img = mpimg.imread(image_path)
+    except Exception as e:
+        raise ValueError(f"Could not load image from {image_path}: {e}")
+
+    # img.shape is (height, width) or (height, width, channels)
+    pixel_height, pixel_width = img.shape[:2]
+    width_inches = pixel_width / dpi
+    height_inches = pixel_height / dpi
+
+    return width_inches, height_inches
+
+
+def coord_from_image(
+    image_path: str,
+    left: float,
+    bottom: float,
+    dpi: float = 300,
+    scale: float = 1.0,
+) -> Coord:
+    """
+    Create a Coord matching an image's exact dimensions.
+
+    Args:
+        image_path: Path to image file
+        left: Left position in inches
+        bottom: Bottom position in inches
+        dpi: DPI to use for pixel-to-inch conversion (default: 300)
+        scale: Scale factor for the image size (default: 1.0)
+
+    Returns:
+        Coord with dimensions matching the image
+
+    Example:
+        # Create panel exactly matching image size
+        a = yp.coord_from_image("structure.png", left=0.5, bottom=3.0)
+
+        # Scale to 50% of original size
+        b = yp.coord_from_image("structure.png", left=0.5, bottom=1.0, scale=0.5)
+    """
+    width, height = get_image_size(image_path, dpi=dpi)
+    return Coord(
+        left=left,
+        bottom=bottom,
+        width=width * scale,
+        height=height * scale,
+    )
 
 
 def create_figure(
@@ -42,20 +103,56 @@ def create_figure(
     return fig, axes
 
 
-def load_image(ax: Axes, image_path: str) -> None:
+def load_image(
+    ax: Axes,
+    image_path: str,
+    coord: Optional[Coord] = None,
+    warn_distortion: bool = True,
+    distortion_threshold: float = 0.05,
+) -> None:
     """
     Load an image into a subplot, stretching to fill the entire panel.
 
     The image will fill edge-to-edge with no white space or margins.
+    If the panel aspect ratio differs from the image, a warning is issued.
 
     Args:
         ax: Axes object to load image into
         image_path: Path to image file
+        coord: Optional Coord of the panel (for aspect ratio check)
+        warn_distortion: Whether to warn if aspect ratios don't match (default: True)
+        distortion_threshold: Tolerance for aspect ratio difference (default: 0.05 = 5%)
+
+    Example:
+        # With aspect ratio warning
+        a = yp.Coord(left=0.5, bottom=2.0, width=3.0, height=2.0)
+        yp.load_image(axes[0], "image.png", coord=a)
+
+        # Or create panel from image to avoid distortion
+        a = yp.coord_from_image("image.png", left=0.5, bottom=2.0)
+        yp.load_image(axes[0], "image.png")
     """
     try:
         img = mpimg.imread(image_path)
     except Exception as e:
         raise ValueError(f"Could not load image from {image_path}: {e}")
+
+    # Check aspect ratio if coord provided
+    if coord is not None and warn_distortion:
+        pixel_height, pixel_width = img.shape[:2]
+        image_aspect = pixel_width / pixel_height
+        panel_aspect = coord.width / coord.height
+
+        aspect_diff = abs(image_aspect - panel_aspect) / image_aspect
+        if aspect_diff > distortion_threshold:
+            warnings.warn(
+                f"Image aspect ratio ({image_aspect:.3f}) differs from panel "
+                f"aspect ratio ({panel_aspect:.3f}) by {aspect_diff*100:.1f}%. "
+                f"Image will be stretched. Use coord_from_image() to create a "
+                f"panel matching the image dimensions.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     ax.clear()
     # aspect='auto' stretches image to fill the axes completely
@@ -107,8 +204,8 @@ def add_labels(
     cfg = get_config()
 
     fontsize = fontsize if fontsize is not None else cfg.panel_label_fontsize
-    fontweight = fontweight if fontweight is not None else cfg.panel_label_weight
-    fontname = fontname if fontname is not None else cfg.fontname
+    fontweight = fontweight if fontweight is not None else cfg.panel_label_fontweight
+    fontname = fontname if fontname is not None else cfg.font_family
     offset = offset if offset is not None else cfg.panel_label_offset
 
     fig_width, fig_height = fig_size

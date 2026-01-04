@@ -2,10 +2,17 @@
 Global configuration for yplot2.
 
 Set defaults once, apply everywhere.
+
+Naming conventions:
+- axis_*    : Axis spines, ticks, labels
+- plot_*    : Data lines and markers
+- legend_*  : Legend styling
+- panel_*   : Panel labels (A, B, C)
+- font_*    : Global font settings
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple
 import copy
 
 
@@ -13,33 +20,61 @@ import copy
 class Config:
     """Global style configuration."""
 
-    # Fonts
-    fontname: str = "Arial"
-    fontsize: float = 8          # Labels, titles
-    tick_fontsize: float = 6     # Tick labels
-    label_fontsize: float = 8    # Axis labels
-    title_fontsize: float = 8    # Titles
-    legend_fontsize: float = 6   # Legend text
-    panel_label_fontsize: float = 12  # A, B, C labels
+    # =========================================================================
+    # Global font settings
+    # =========================================================================
+    font_family: str = "Arial"
 
-    # Lines
-    linewidth: float = 0.75      # Axis spines
-    tick_width: float = 0.75     # Tick marks
-    tick_size: float = 2.0       # Tick length
-    tick_pad: float = 1.0        # Tick to label padding
-    plot_linewidth: float = 1.5  # Data lines
+    # =========================================================================
+    # Axis settings (spines, ticks, labels)
+    # =========================================================================
+    # Spine (axis lines)
+    axis_linewidth: float = 0.75
 
-    # Markers
-    markersize: float = 4        # Data markers
+    # Tick marks
+    axis_tick_width: float = 0.75
+    axis_tick_length: float = 2.0
+    axis_tick_pad: float = 1.0
+    axis_tick_fontsize: float = 6
+    axis_tick_direction: str = "out"  # "in", "out", "inout"
 
-    # Legend
+    # Axis labels (xlabel, ylabel)
+    axis_label_fontsize: float = 8
+    axis_label_pad: float = 2.0
+
+    # Axis title
+    axis_title_fontsize: float = 8
+    axis_title_pad: float = 4.0
+
+    # =========================================================================
+    # Plot settings (data lines, markers)
+    # =========================================================================
+    plot_linewidth: float = 1.5
+    plot_markersize: float = 4
+    plot_capsize: float = 3.0         # Error bar caps
+    plot_capthick: float = 0.75       # Error bar cap thickness
+
+    # =========================================================================
+    # Legend settings
+    # =========================================================================
+    legend_fontsize: float = 6
     legend_frameon: bool = False
     legend_handlelength: float = 1.0
     legend_labelspacing: float = 0.15
 
-    # Panel labels
-    panel_label_weight: str = "bold"
-    panel_label_offset: tuple = (-0.4, 0.15)  # (dx, dy) in inches
+    # =========================================================================
+    # Panel label settings (A, B, C, ...)
+    # =========================================================================
+    panel_label_fontsize: float = 12
+    panel_label_fontweight: str = "bold"
+    panel_label_offset: Tuple[float, float] = (-0.4, 0.15)  # (dx, dy) inches
+
+    # =========================================================================
+    # Colorbar settings
+    # =========================================================================
+    colorbar_width: float = 0.1       # inches
+    colorbar_pad: float = 0.05        # inches
+    colorbar_tick_fontsize: float = 6
 
 
 # Global instance
@@ -59,14 +94,28 @@ def set_config(**kwargs) -> None:
         **kwargs: Any Config field name and value
 
     Example:
-        yp.set_config(fontname="Helvetica", fontsize=10)
+        yp.set_config(font_family="Helvetica", axis_label_fontsize=10)
     """
     global _config
     for key, value in kwargs.items():
         if hasattr(_config, key):
             setattr(_config, key, value)
         else:
-            raise ValueError(f"Unknown config option: {key}")
+            raise ValueError(f"Unknown config option: {key}. "
+                           f"Available: {list_config_options()}")
+
+
+def get_config_value(key: str):
+    """Get a single config value by name."""
+    cfg = get_config()
+    if hasattr(cfg, key):
+        return getattr(cfg, key)
+    raise ValueError(f"Unknown config option: {key}")
+
+
+def list_config_options() -> list:
+    """List all available config option names."""
+    return [f.name for f in Config.__dataclass_fields__.values()]
 
 
 def reset_config() -> None:
@@ -75,47 +124,97 @@ def reset_config() -> None:
     _config = Config()
 
 
+def print_config() -> None:
+    """Print current configuration."""
+    cfg = get_config()
+    print("Current yplot2 configuration:")
+    print("-" * 40)
+
+    # Group by prefix
+    groups = {}
+    for key in list_config_options():
+        prefix = key.split('_')[0]
+        if prefix not in groups:
+            groups[prefix] = []
+        groups[prefix].append(key)
+
+    for prefix in ['font', 'axis', 'plot', 'legend', 'panel', 'colorbar']:
+        if prefix in groups:
+            print(f"\n{prefix.upper()}:")
+            for key in groups[prefix]:
+                value = getattr(cfg, key)
+                print(f"  {key}: {value}")
+
+
+# =============================================================================
 # Preset styles
+# =============================================================================
 _presets = {
     "publication": Config(
-        fontname="Arial",
-        fontsize=8,
-        tick_fontsize=6,
-        linewidth=0.75,
-        tick_width=0.75,
-        tick_size=2.0,
-        markersize=4,
+        font_family="Arial",
+        axis_linewidth=0.75,
+        axis_tick_width=0.75,
+        axis_tick_length=2.0,
+        axis_tick_fontsize=6,
+        axis_label_fontsize=8,
+        axis_title_fontsize=8,
         plot_linewidth=1.5,
+        plot_markersize=4,
+        legend_fontsize=6,
+        panel_label_fontsize=12,
     ),
     "poster": Config(
-        fontname="Arial",
-        fontsize=14,
-        tick_fontsize=12,
-        linewidth=1.5,
-        tick_width=1.5,
-        tick_size=4.0,
-        markersize=8,
+        font_family="Arial",
+        axis_linewidth=1.5,
+        axis_tick_width=1.5,
+        axis_tick_length=4.0,
+        axis_tick_fontsize=14,
+        axis_label_fontsize=16,
+        axis_title_fontsize=16,
         plot_linewidth=2.5,
+        plot_markersize=8,
+        legend_fontsize=12,
+        panel_label_fontsize=20,
     ),
     "presentation": Config(
-        fontname="Arial",
-        fontsize=12,
-        tick_fontsize=10,
-        linewidth=1.0,
-        tick_width=1.0,
-        tick_size=3.0,
-        markersize=6,
+        font_family="Arial",
+        axis_linewidth=1.0,
+        axis_tick_width=1.0,
+        axis_tick_length=3.0,
+        axis_tick_fontsize=10,
+        axis_label_fontsize=12,
+        axis_title_fontsize=12,
         plot_linewidth=2.0,
+        plot_markersize=6,
+        legend_fontsize=10,
+        panel_label_fontsize=16,
     ),
     "minimal": Config(
-        fontname="Arial",
-        fontsize=8,
-        tick_fontsize=6,
-        linewidth=0.5,
-        tick_width=0.5,
-        tick_size=1.5,
-        markersize=3,
+        font_family="Arial",
+        axis_linewidth=0.5,
+        axis_tick_width=0.5,
+        axis_tick_length=1.5,
+        axis_tick_fontsize=6,
+        axis_label_fontsize=7,
+        axis_title_fontsize=7,
         plot_linewidth=1.0,
+        plot_markersize=3,
+        legend_fontsize=5,
+        panel_label_fontsize=10,
+    ),
+    "nature": Config(
+        font_family="Arial",
+        axis_linewidth=0.5,
+        axis_tick_width=0.5,
+        axis_tick_length=2.0,
+        axis_tick_fontsize=5,
+        axis_label_fontsize=6,
+        axis_title_fontsize=6,
+        plot_linewidth=1.0,
+        plot_markersize=3,
+        legend_fontsize=5,
+        panel_label_fontsize=8,
+        panel_label_fontweight="bold",
     ),
 }
 
@@ -125,7 +224,14 @@ def use_preset(name: str) -> None:
     Load a preset style configuration.
 
     Args:
-        name: Preset name ("publication", "poster", "presentation", "minimal")
+        name: Preset name
+
+    Available presets:
+        - "publication": Standard publication (default)
+        - "poster": Large fonts/lines for posters
+        - "presentation": Medium for slides
+        - "minimal": Thin lines, small fonts
+        - "nature": Nature journal style
 
     Example:
         yp.use_preset("publication")
