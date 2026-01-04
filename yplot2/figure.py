@@ -43,7 +43,9 @@ def create_figure(
 
 def load_image(ax: Axes, image_path: str) -> None:
     """
-    Load an image into a subplot, stretching to fit.
+    Load an image into a subplot, stretching to fill the entire panel.
+
+    The image will fill edge-to-edge with no white space or margins.
 
     Args:
         ax: Axes object to load image into
@@ -55,15 +57,25 @@ def load_image(ax: Axes, image_path: str) -> None:
         raise ValueError(f"Could not load image from {image_path}: {e}")
 
     ax.clear()
-    ax.imshow(img)
+    # aspect='auto' stretches image to fill the axes completely
+    ax.imshow(img, aspect='auto')
 
-    # Remove axes decorations
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+    # Remove all axes decorations
+    ax.axis('off')
+
+
+def make_image_panel(ax: Axes) -> None:
+    """
+    Prepare an axes to be used as an image panel (no borders, ticks, etc.).
+
+    Use this when you want to draw custom content that fills edge-to-edge.
+
+    Args:
+        ax: Axes object to prepare
+    """
+    ax.axis('off')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
 
 
 def add_labels(

@@ -61,6 +61,7 @@ from .spacing import (
 from .figure import (
     create_figure,
     load_image,
+    make_image_panel,
     add_labels,
     draw_debug_boxes,
     add_colorbar,
@@ -105,6 +106,7 @@ __all__ = [
     # Figure
     "create_figure",
     "load_image",
+    "make_image_panel",
     "add_labels",
     "draw_debug_boxes",
     "add_colorbar",
