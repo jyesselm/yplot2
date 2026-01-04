@@ -234,16 +234,16 @@ Plot population average reactivities with nucleotide-colored bars:
 
 ```python
 # Plot RNA reactivity data
-yp.plot_pop_avg(ax, "ACGU", "(..)", [0.1, 0.2, 0.3, 0.4])
+yp.pop_avg(ax, "ACGU", "(..)", [0.1, 0.2, 0.3, 0.4])
 
 # Plot from DataFrame row
-yp.plot_pop_avg_from_row(ax, row, data_col="data")
+yp.pop_avg_from_row(ax, row, data_col="data")
 
 # Plot all rows in DataFrame
-yp.plot_pop_avg_all(df, data_col="data")
+yp.pop_avg_all(df, data_col="data")
 
 # Overlay traces
-yp.plot_pop_avg_traces(ax, df, data_col="data", label_col="rna_name")
+yp.pop_avg_traces(ax, df, data_col="data", label_col="rna_name")
 
 # Get colors for nucleotides
 colors = yp.colors_for_sequence("ACGU")  # ['red', 'blue', 'orange', 'green']
@@ -466,11 +466,11 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 
 ### Plotting (Specialized)
 - `lollipop(ax, x, y1, y2, ...)` - Paired lollipop plot
-- `plot_pop_avg(ax, sequence, structure, reactivities, ...)` - RNA reactivity bar plot
-- `plot_pop_avg_from_row(ax, row, ...)` - Plot from DataFrame row
-- `plot_pop_avg_diff_from_rows(row1, row2, ...)` - Difference plot
-- `plot_pop_avg_all(df, ...)` - Plot all rows in DataFrame
-- `plot_pop_avg_traces(ax, df, ...)` - Overlaid traces
+- `pop_avg(ax, sequence, structure, reactivities, ...)` - RNA reactivity bar plot
+- `pop_avg_from_row(ax, row, ...)` - Plot from DataFrame row
+- `pop_avg_diff(row1, row2, ...)` - Difference plot
+- `pop_avg_all(df, ...)` - Plot all rows in DataFrame
+- `pop_avg_traces(ax, df, ...)` - Overlaid traces
 - `colors_for_sequence(seq)` - Get nucleotide colors (A=red, C=blue, G=orange, T/U=green)
 
 ### Styling

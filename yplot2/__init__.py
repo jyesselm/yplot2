@@ -120,11 +120,11 @@ from .plots import (
     text,
     # Specialized plots
     lollipop,
-    plot_pop_avg,
-    plot_pop_avg_from_row,
-    plot_pop_avg_diff_from_rows,
-    plot_pop_avg_all,
-    plot_pop_avg_traces,
+    pop_avg,
+    pop_avg_from_row,
+    pop_avg_diff,
+    pop_avg_all,
+    pop_avg_traces,
     # Color utilities
     colors_for_sequence,
     NUCLEOTIDE_COLORS,
@@ -205,11 +205,11 @@ __all__ = [
     "text",
     # Specialized plots
     "lollipop",
-    "plot_pop_avg",
-    "plot_pop_avg_from_row",
-    "plot_pop_avg_diff_from_rows",
-    "plot_pop_avg_all",
-    "plot_pop_avg_traces",
+    "pop_avg",
+    "pop_avg_from_row",
+    "pop_avg_diff",
+    "pop_avg_all",
+    "pop_avg_traces",
     # Color utilities
     "colors_for_sequence",
     "NUCLEOTIDE_COLORS",

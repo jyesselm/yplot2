@@ -49,7 +49,7 @@ def _apply_x_axis_by_name(
                        fontname=cfg.font_family)
 
 
-def plot_pop_avg(
+def pop_avg(
     ax: Axes,
     sequence: str,
     structure: str,
@@ -76,7 +76,7 @@ def plot_pop_avg(
 
     Example:
         >>> fig, ax = plt.subplots()
-        >>> plot_pop_avg(ax, "ACGU", "(..)", [0.1, 0.2, 0.3, 0.4])
+        >>> pop_avg(ax, "ACGU", "(..)", [0.1, 0.2, 0.3, 0.4])
     """
     cfg = get_config()
 
@@ -93,7 +93,7 @@ def plot_pop_avg(
     return ax
 
 
-def plot_pop_avg_from_row(
+def pop_avg_from_row(
     ax: Axes,
     row: dict,
     data_col: str = "data",
@@ -106,12 +106,12 @@ def plot_pop_avg_from_row(
         ax: Matplotlib Axes to plot on.
         row: Dictionary-like object with 'sequence', 'structure', and data.
         data_col: Column name containing reactivity data.
-        **kwargs: Additional arguments passed to plot_pop_avg().
+        **kwargs: Additional arguments passed to pop_avg().
 
     Returns:
         The matplotlib Axes containing the bar plot.
     """
-    return plot_pop_avg(
+    return pop_avg(
         ax,
         row["sequence"],
         row["structure"],
@@ -120,7 +120,7 @@ def plot_pop_avg_from_row(
     )
 
 
-def plot_pop_avg_diff_from_rows(
+def pop_avg_diff(
     row1: dict,
     row2: dict,
     data_col: str = "data",
@@ -147,20 +147,20 @@ def plot_pop_avg_diff_from_rows(
     else:
         fig = axes[0].get_figure()
 
-    plot_pop_avg_from_row(axes[0], row1, data_col=data_col)
-    plot_pop_avg_from_row(axes[1], row2, data_col=data_col)
+    pop_avg_from_row(axes[0], row1, data_col=data_col)
+    pop_avg_from_row(axes[1], row2, data_col=data_col)
 
     diff_row = {
         "sequence": row1["sequence"],
         "structure": row1["structure"],
         data_col: np.array(row1[data_col]) - np.array(row2[data_col]),
     }
-    plot_pop_avg_from_row(axes[2], diff_row, data_col=data_col)
+    pop_avg_from_row(axes[2], diff_row, data_col=data_col)
 
     return fig
 
 
-def plot_pop_avg_all(
+def pop_avg_all(
     df,
     data_col: str = "data",
     axes: Optional[Union[List[Axes], np.ndarray]] = None,
@@ -188,14 +188,14 @@ def plot_pop_avg_all(
         axes = [axes]
 
     for j, (_, row) in enumerate(df.iterrows()):
-        plot_pop_avg_from_row(axes[j], row, data_col=data_col)
+        pop_avg_from_row(axes[j], row, data_col=data_col)
         if "rna_name" in row:
             axes[j].set_title(row["rna_name"])
 
     return fig
 
 
-def plot_pop_avg_traces(
+def pop_avg_traces(
     ax: Axes,
     df,
     data_col: str = "data",
