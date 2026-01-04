@@ -90,6 +90,14 @@ from .axes import (
     add_shared_xlabel,
     add_shared_ylabel,
     group_grid,
+    # Log axis with zero handling
+    compute_eps_and_transform,
+    log_axis_with_zero,
+    # Sequence/structure axis formatting
+    sequence_x_axis,
+    structure_x_axis,
+    sequence_structure_x_axis,
+    apply_x_axis_format,
 )
 
 # Styling
@@ -182,6 +190,14 @@ __all__ = [
     "add_shared_xlabel",
     "add_shared_ylabel",
     "group_grid",
+    # Log axis with zero handling
+    "compute_eps_and_transform",
+    "log_axis_with_zero",
+    # Sequence/structure axis formatting
+    "sequence_x_axis",
+    "structure_x_axis",
+    "sequence_structure_x_axis",
+    "apply_x_axis_format",
     # Style
     "apply_style",
     "apply_style_to_all",

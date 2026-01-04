@@ -303,6 +303,47 @@ yp.group_grid(
 )
 ```
 
+## Log Axis with Zero Handling
+
+For log-scale plots that include zero values:
+
+```python
+import numpy as np
+
+x = np.array([0, 0.1, 1, 10, 100])
+y = np.array([1, 2, 3, 4, 5])
+
+# Transform zeros to epsilon for log scale
+eps, positive_vals, x_plot = yp.compute_eps_and_transform(x)
+
+# Plot with transformed x values
+ax.scatter(x_plot, y)
+
+# Configure axis to show "0" at epsilon position
+yp.log_axis_with_zero(ax, eps, positive_vals)
+```
+
+## Sequence/Structure Axis Formatting
+
+For molecular data with sequence or structure labels:
+
+```python
+sequence = "ACGU"
+structure = "(..)"
+
+# Show just sequence on x-axis
+yp.sequence_x_axis(ax, sequence)
+
+# Show just structure on x-axis
+yp.structure_x_axis(ax, structure)
+
+# Show both (sequence on top, structure below)
+yp.sequence_structure_x_axis(ax, sequence, structure)
+
+# Or use by name
+yp.apply_x_axis_format(ax, sequence, structure, "sequence_structure")
+```
+
 ## Image Panels
 
 For figures with molecular structures, schematics, etc:
@@ -486,3 +527,13 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `add_shared_xlabel(fig, coords, fig_size, label)` - Shared x label
 - `add_shared_ylabel(fig, coords, fig_size, label)` - Shared y label
 - `group_grid(axes_grid, ...)` - Configure grid of axes
+
+### Log Axis with Zero Handling
+- `compute_eps_and_transform(x)` - Transform data with zeros for log scale
+- `log_axis_with_zero(ax, eps, positive_values)` - Configure log axis showing zero
+
+### Sequence/Structure Axis Formatting
+- `sequence_x_axis(ax, sequence)` - Show nucleotide sequence on x-axis
+- `structure_x_axis(ax, structure)` - Show dot-bracket structure on x-axis
+- `sequence_structure_x_axis(ax, sequence, structure)` - Show both (stacked)
+- `apply_x_axis_format(ax, sequence, structure, axis_type)` - Apply by name

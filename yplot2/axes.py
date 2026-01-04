@@ -1,14 +1,19 @@
 """
 Axes grouping and shared axis utilities.
 
-Functions for linking axes that share common x or y axes.
+Functions for linking axes, log scales with zero handling,
+and sequence/structure axis formatting.
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Sequence
+
+import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.ticker import FixedLocator, FuncFormatter
 
 from .coordinates import Coord
+from .config import get_config
 
 
 def share_x(
@@ -252,3 +257,228 @@ def group_grid(
             left_col = [axes_grid[row][0] for row in range(n_rows)]
             mid_ax = left_col[n_rows // 2]
             mid_ax.set_ylabel(y_label)
+
+
+# =============================================================================
+# Logarithmic axis utilities with zero handling
+# =============================================================================
+
+def compute_eps_and_transform(
+    x: np.ndarray,
+    epsilon_factor: float = 0.1,
+) -> Tuple[float, np.ndarray, np.ndarray]:
+    """
+    Compute epsilon value and transform data for log scale with zeros.
+
+    Args:
+        x: Input array that may contain zeros.
+        epsilon_factor: Factor to multiply minimum positive value (default: 0.1).
+
+    Returns:
+        Tuple of (epsilon, positive_values, transformed_x) where:
+            - epsilon: Small value representing zero on log scale
+            - positive_values: Array of positive values from x
+            - transformed_x: x with zeros replaced by epsilon
+
+    Raises:
+        ValueError: If all x values are zero.
+
+    Example:
+        >>> x = np.array([0, 0.1, 1, 10])
+        >>> eps, pos, x_plot = compute_eps_and_transform(x)
+    """
+    positive = x[x > 0]
+    if positive.size == 0:
+        raise ValueError("All x values are zero; cannot use log scale.")
+
+    eps = epsilon_factor * float(np.min(positive))
+    x_transformed = x.copy()
+    x_transformed[x_transformed <= 0] = eps
+
+    return eps, positive, x_transformed
+
+
+def log_axis_with_zero(
+    ax: Axes,
+    eps: float,
+    positive_values: np.ndarray,
+    decade_ticks: Optional[Sequence[float]] = None,
+    left_pad: float = 1.5,
+    right_pad: float = 1.5,
+) -> None:
+    """
+    Configure log scale x-axis with zero represented at epsilon.
+
+    Args:
+        ax: The matplotlib Axes object to modify.
+        eps: Epsilon value representing zero.
+        positive_values: Array of positive data values.
+        decade_ticks: Optional list of decade tick positions.
+        left_pad: Left padding factor for x-limits.
+        right_pad: Right padding factor for x-limits.
+
+    Example:
+        >>> eps, pos, x_plot = compute_eps_and_transform(data)
+        >>> ax.scatter(x_plot, y)
+        >>> log_axis_with_zero(ax, eps, pos)
+    """
+    ax.set_xscale("log")
+
+    tick_positions = _compute_tick_positions(eps, positive_values, decade_ticks)
+    ax.xaxis.set_major_locator(FixedLocator(tick_positions))
+
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda val, _: _format_tick(val, eps)))
+    ax.set_xlim(eps / left_pad, float(np.max(positive_values)) * right_pad)
+
+
+def _compute_tick_positions(
+    eps: float,
+    positive_values: np.ndarray,
+    decade_ticks: Optional[Sequence[float]],
+) -> list:
+    """Compute tick positions for log axis."""
+    if decade_ticks is None:
+        lo_pow = int(np.floor(np.log10(max(eps, float(np.min(positive_values)) * 0.8))))
+        hi_pow = int(np.ceil(np.log10(float(np.max(positive_values)) * 1.2)))
+        decade_ticks = [10.0**p for p in range(lo_pow, hi_pow + 1)]
+
+    max_val = float(np.max(positive_values)) * 1.05
+    filtered = [t for t in decade_ticks if eps <= t <= max_val]
+    return [eps] + filtered
+
+
+def _format_tick(val: float, eps: float) -> str:
+    """Format tick label, showing '0' for epsilon value."""
+    if np.isclose(val, eps):
+        return "0"
+    return f"{val:g}"
+
+
+# =============================================================================
+# Sequence and structure axis formatting
+# =============================================================================
+
+def sequence_x_axis(
+    ax: Axes,
+    sequence: str,
+    x_delta: int = 1,
+) -> Axes:
+    """
+    Set x-axis to display nucleotide sequence.
+
+    Args:
+        ax: The matplotlib Axes object to modify.
+        sequence: The RNA or DNA sequence string.
+        x_delta: Padding around sequence bounds (default: 1).
+
+    Returns:
+        The modified matplotlib Axes object.
+
+    Example:
+        >>> fig, ax = plt.subplots()
+        >>> sequence_x_axis(ax, "ACGU")
+    """
+    cfg = get_config()
+    ax.set_xticks(range(len(sequence)))
+    ax.set_xticklabels(list(sequence), fontsize=cfg.axis_tick_fontsize,
+                       fontname=cfg.font_family)
+    ax.set_xlim(-x_delta, len(sequence) - 1 + x_delta)
+    return ax
+
+
+def structure_x_axis(
+    ax: Axes,
+    structure: str,
+    x_delta: int = 1,
+) -> Axes:
+    """
+    Set x-axis to display secondary structure notation.
+
+    Args:
+        ax: The matplotlib Axes object to modify.
+        structure: The secondary structure string (dot-bracket notation).
+        x_delta: Padding around structure bounds (default: 1).
+
+    Returns:
+        The modified matplotlib Axes object.
+
+    Example:
+        >>> fig, ax = plt.subplots()
+        >>> structure_x_axis(ax, "(((.)))")
+    """
+    cfg = get_config()
+    ax.set_xticks(range(len(structure)))
+    ax.set_xticklabels(list(structure), fontsize=cfg.axis_tick_fontsize,
+                       fontname=cfg.font_family)
+    ax.set_xlim(-x_delta, len(structure) - 1 + x_delta)
+    return ax
+
+
+def sequence_structure_x_axis(
+    ax: Axes,
+    sequence: str,
+    structure: str,
+    x_delta: int = 1,
+) -> Axes:
+    """
+    Set x-axis to display both sequence and structure.
+
+    Each tick label shows the nucleotide with structure character below.
+
+    Args:
+        ax: The matplotlib Axes object to modify.
+        sequence: The RNA or DNA sequence string.
+        structure: The secondary structure string (same length as sequence).
+        x_delta: Padding around bounds (default: 1).
+
+    Returns:
+        The modified matplotlib Axes object.
+
+    Example:
+        >>> fig, ax = plt.subplots()
+        >>> sequence_structure_x_axis(ax, "ACGU", "(((.")
+    """
+    cfg = get_config()
+    labels = [f"{seq}\n{struct}" for seq, struct in zip(sequence, structure)]
+    ax.set_xticks(range(len(sequence)))
+    ax.set_xticklabels(labels, fontsize=cfg.axis_tick_fontsize,
+                       fontname=cfg.font_family)
+    ax.set_xlim(-x_delta, len(sequence) - 1 + x_delta)
+    return ax
+
+
+def apply_x_axis_format(
+    ax: Axes,
+    sequence: str,
+    structure: str,
+    axis_type: str,
+) -> Axes:
+    """
+    Apply x-axis labeling strategy by name.
+
+    Args:
+        ax: The matplotlib Axes to modify.
+        sequence: Sequence string.
+        structure: Structure string.
+        axis_type: One of "sequence_structure", "sequence", "structure".
+
+    Returns:
+        The modified matplotlib Axes.
+
+    Raises:
+        ValueError: If axis_type is not recognized.
+
+    Example:
+        >>> apply_x_axis_format(ax, "ACGU", "(..)", "sequence_structure")
+    """
+    if axis_type == "sequence_structure":
+        return sequence_structure_x_axis(ax, sequence, structure)
+    elif axis_type == "sequence":
+        return sequence_x_axis(ax, sequence)
+    elif axis_type == "structure":
+        return structure_x_axis(ax, structure)
+    else:
+        raise ValueError(
+            f"Unknown axis_type: {axis_type}. "
+            f"Use 'sequence_structure', 'sequence', or 'structure'."
+        )
