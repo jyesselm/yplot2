@@ -67,6 +67,16 @@ from .figure import (
     add_colorbar,
 )
 
+# Axes grouping and shared axes
+from .axes import (
+    share_x,
+    share_y,
+    sync_limits,
+    add_shared_xlabel,
+    add_shared_ylabel,
+    group_grid,
+)
+
 # Styling
 from .style import (
     publication_style,
@@ -110,6 +120,13 @@ __all__ = [
     "add_labels",
     "draw_debug_boxes",
     "add_colorbar",
+    # Axes grouping
+    "share_x",
+    "share_y",
+    "sync_limits",
+    "add_shared_xlabel",
+    "add_shared_ylabel",
+    "group_grid",
     # Style
     "publication_style",
     "apply_style_to_all",
