@@ -93,8 +93,21 @@ from .style import (
     apply_style_to_all,
     remove_spines,
     add_legend,
+)
+
+# Plot functions (use global config)
+from .plots import (
     scatter,
     line,
+    bar,
+    barh,
+    errorbar,
+    fill_between,
+    hist,
+    boxplot,
+    hline,
+    vline,
+    text,
 )
 
 __all__ = [
@@ -149,6 +162,16 @@ __all__ = [
     "apply_style_to_all",
     "remove_spines",
     "add_legend",
+    # Plot functions
     "scatter",
     "line",
+    "bar",
+    "barh",
+    "errorbar",
+    "fill_between",
+    "hist",
+    "boxplot",
+    "hline",
+    "vline",
+    "text",
 ]
