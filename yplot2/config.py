@@ -29,7 +29,7 @@ class Config:
     # Whether to apply font size changes in apply_style
     apply_fontsizes: bool = True
     # Fonts to preserve - don't override these when apply_style is called
-    preserve_font_families: Tuple[str, ...] = ()
+    preserve_font_families: Tuple[str, ...] = ("Arial MS Unicode",)
 
     # =========================================================================
     # Axis settings (spines, ticks, labels)
