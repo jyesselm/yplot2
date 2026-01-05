@@ -79,6 +79,7 @@ from .figure import (
     make_image_panel,
     add_labels,
     draw_debug_boxes,
+    draw_figure_border,
     add_colorbar,
 )
 
@@ -110,6 +111,8 @@ from .style import (
     set_xlabel,
     set_ylabel,
     set_title,
+    set_background,
+    set_background_all,
 )
 
 # Plot functions (use global config)
@@ -182,6 +185,7 @@ __all__ = [
     "make_image_panel",
     "add_labels",
     "draw_debug_boxes",
+    "draw_figure_border",
     "add_colorbar",
     # Axes grouping
     "share_x",
@@ -207,6 +211,8 @@ __all__ = [
     "set_xlabel",
     "set_ylabel",
     "set_title",
+    "set_background",
+    "set_background_all",
     # Basic plot functions
     "scatter",
     "line",

@@ -282,3 +282,39 @@ def set_title(
     fontsize = fontsize if fontsize is not None else cfg.axis_title_fontsize
     fontname = fontname if fontname is not None else cfg.font_family
     ax.set_title(title, fontsize=fontsize, fontname=fontname, **kwargs)
+
+
+def set_background(
+    ax: Axes,
+    color: str = "lightgray",
+) -> None:
+    """
+    Set background color of an axes to make it easy to see.
+
+    Args:
+        ax: Axes object
+        color: Background color (default: "lightgray")
+
+    Example:
+        yp.set_background(ax)
+        yp.set_background(ax, "lightyellow")
+    """
+    ax.set_facecolor(color)
+
+
+def set_background_all(
+    axes: List[Axes],
+    color: str = "lightgray",
+) -> None:
+    """
+    Set background color for multiple axes.
+
+    Args:
+        axes: List of Axes objects
+        color: Background color (default: "lightgray")
+
+    Example:
+        yp.set_background_all(axes)
+    """
+    for ax in axes:
+        set_background(ax, color)

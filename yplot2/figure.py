@@ -277,6 +277,34 @@ def draw_debug_boxes(
         fig.patches.append(rect)
 
 
+def draw_figure_border(
+    fig: Figure,
+    linewidth: float = 1,
+    color: str = "black",
+) -> None:
+    """
+    Draw a box around the entire figure.
+
+    Args:
+        fig: Figure object
+        linewidth: Width of border line
+        color: Border color
+
+    Example:
+        yp.draw_figure_border(fig)
+        yp.draw_figure_border(fig, linewidth=2, color="gray")
+    """
+    rect = patches.Rectangle(
+        (0, 0), 1, 1,
+        linewidth=linewidth,
+        edgecolor=color,
+        facecolor="none",
+        transform=fig.transFigure,
+        clip_on=False,
+    )
+    fig.patches.append(rect)
+
+
 def add_colorbar(
     fig: Figure,
     ax: Axes,

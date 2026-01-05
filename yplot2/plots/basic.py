@@ -4,9 +4,65 @@ All functions allow overriding any parameter via kwargs.
 """
 
 from typing import Optional, Union, List
+import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.transforms import ScaledTranslation
+from matplotlib import rcParams
 
 from ..config import get_config
+
+
+# Position definitions: (x, y, x_offset_pts, y_offset_pts, va, ha)
+# x, y are anchor points in axes coordinates (0-1)
+# x_offset_pts, y_offset_pts are offsets in points (1 point = 1/72 inch)
+TEXT_POSITIONS: dict[str, tuple[float, float, float, float, str, str]] = {
+    # Corners (inside axes)
+    "top left": (0, 1, 4, -4, "top", "left"),
+    "top right": (1, 1, -4, -4, "top", "right"),
+    "bottom left": (0, 0, 4, 4, "bottom", "left"),
+    "bottom right": (1, 0, -4, 4, "bottom", "right"),
+    # Edges (centered on edge, inside axes)
+    "top": (0.5, 1, 0, -4, "top", "center"),
+    "bottom": (0.5, 0, 0, 4, "bottom", "center"),
+    "left": (0, 0.5, 4, 0, "center", "left"),
+    "right": (1, 0.5, -4, 0, "center", "right"),
+    # Center
+    "center": (0.5, 0.5, 0, 0, "center", "center"),
+    # Outside axes
+    "above": (0.5, 1, 0, 4, "bottom", "center"),
+    "below": (0.5, 0, 0, -12, "top", "center"),
+}
+
+# Short aliases for common positions
+TEXT_POSITION_ALIASES: dict[str, str] = {
+    "tl": "top left",
+    "tr": "top right",
+    "bl": "bottom left",
+    "br": "bottom right",
+}
+
+
+def _calculate_offset(pos_name: str, offset: float) -> tuple[float, float]:
+    """Calculate x and y offsets based on position name and offset value."""
+    if pos_name in ("top left", "left", "bottom left"):
+        x_off = offset
+    elif pos_name in ("top right", "right", "bottom right"):
+        x_off = -offset
+    else:
+        x_off = 0
+
+    if pos_name in ("top left", "top", "top right"):
+        y_off = -offset
+    elif pos_name in ("bottom left", "bottom", "bottom right"):
+        y_off = offset
+    elif pos_name == "above":
+        y_off = offset
+    elif pos_name == "below":
+        y_off = -offset
+    else:
+        y_off = 0
+
+    return x_off, y_off
 
 
 def scatter(
@@ -367,33 +423,105 @@ def vline(
 
 
 def text(
-    ax: Axes,
-    x: float,
-    y: float,
-    s: str,
+    ax: plt.Axes,
+    text: str,
+    pos: Union[str, tuple[float, float]] = "top left",
     fontsize: Optional[float] = None,
-    fontname: Optional[str] = None,
+    offset: Optional[float] = None,
+    box: bool = False,
+    box_facecolor: str = "white",
+    box_edgecolor: str = "black",
+    box_alpha: float = 0.9,
+    box_style: str = "round,pad=0.3",
     **kwargs,
-):
+) -> plt.Text:
     """
-    Text annotation using global config defaults.
+    Add text at a named position relative to the axes.
+
+    Text is positioned at a fixed point offset from the axes edge,
+    independent of axes size.
 
     Args:
-        ax: Axes object
-        x, y: Text position
-        s: Text string
-        fontsize: Font size
-        fontname: Font family
-        **kwargs: Additional args to ax.text()
+        ax: Matplotlib Axes to add text to.
+        text: Text string to display.
+        pos: Position name ('top left', 'center', etc.), alias ('tl', 'tr'),
+            or tuple of (x, y) in axes coordinates.
+        fontsize: Font size (defaults to rcParams).
+        offset: Offset from edge in points (1 point = 1/72 inch).
+            Overrides default offset. Default is 4 points.
+        box: If True, draw a box around the text.
+        box_facecolor: Background color for box.
+        box_edgecolor: Edge color for box.
+        box_alpha: Transparency for box.
+        box_style: Style of box ('round,pad=0.3', 'square', etc.).
+        **kwargs: Additional arguments passed to ax.text (color, fontweight, etc.).
 
     Returns:
-        Text object
+        The matplotlib Text object.
+
+    Available positions:
+        - Corners: 'top left' (tl), 'top right' (tr), 'bottom left' (bl), 'bottom right' (br)
+        - Edges: 'top', 'bottom', 'left', 'right'
+        - Center: 'center'
+        - Outside: 'above', 'below'
+
+    Example:
+        >>> text(ax, "n = 100", pos="top left")
+        >>> text(ax, "p < 0.05", pos="tr", fontsize=8)
+        >>> text(ax, "R² = 0.95", pos="bottom right", fontweight="bold")
+        >>> text(ax, "Important", pos="center", box=True)
+        >>> text(ax, "Custom", pos=(0.5, 0.8))
+        >>> text(ax, "More offset", pos="top left", offset=10)
     """
-    cfg = get_config()
+    fontsize = fontsize or rcParams["font.size"]
+    fontfamily = kwargs.pop("fontfamily", None) or kwargs.pop("fontname", None) or rcParams["font.family"]
+    fig = ax.get_figure()
 
-    if fontsize is None:
-        fontsize = cfg.axis_label_fontsize
-    if fontname is None:
-        fontname = cfg.font_family
+    # Resolve position
+    if isinstance(pos, str):
+        # Check for alias
+        pos_name = TEXT_POSITION_ALIASES.get(pos, pos)
+        if pos_name not in TEXT_POSITIONS:
+            valid = list(TEXT_POSITIONS.keys()) + list(TEXT_POSITION_ALIASES.keys())
+            raise ValueError(
+                f"Unknown position '{pos}'. Valid positions: {valid}"
+            )
+        x, y, x_off, y_off, va, ha = TEXT_POSITIONS[pos_name]
 
-    return ax.text(x, y, s, fontsize=fontsize, fontname=fontname, **kwargs)
+        # Apply custom offset if specified
+        if offset is not None:
+            x_off, y_off = _calculate_offset(pos_name, offset)
+
+        # Create transform with point-based offset
+        # ScaledTranslation takes offset in inches, so convert points to inches
+        offset_transform = ScaledTranslation(
+            x_off / 72, y_off / 72, fig.dpi_scale_trans
+        )
+        transform = ax.transAxes + offset_transform
+    else:
+        # Custom (x, y) tuple - use axes coordinates directly
+        x, y = pos
+        va = kwargs.pop("va", "center")
+        ha = kwargs.pop("ha", "center")
+        transform = ax.transAxes
+
+    # Build text kwargs
+    text_kwargs = {
+        "transform": transform,
+        "fontsize": fontsize,
+        "fontfamily": fontfamily,
+        "verticalalignment": va,
+        "horizontalalignment": ha,
+    }
+    text_kwargs.update(kwargs)
+
+    # Add box if requested
+    if box:
+        text_kwargs["bbox"] = dict(
+            boxstyle=box_style,
+            facecolor=box_facecolor,
+            edgecolor=box_edgecolor,
+            alpha=box_alpha,
+        )
+
+    return ax.text(x, y, text, **text_kwargs)
