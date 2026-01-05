@@ -12,7 +12,7 @@ Naming conventions:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import copy
 
 
@@ -24,6 +24,12 @@ class Config:
     # Global font settings
     # =========================================================================
     font_family: str = "Arial"
+    # Whether to apply font family changes in apply_style
+    apply_fonts: bool = True
+    # Whether to apply font size changes in apply_style
+    apply_fontsizes: bool = True
+    # Fonts to preserve - don't override these when apply_style is called
+    preserve_font_families: Tuple[str, ...] = ()
 
     # =========================================================================
     # Axis settings (spines, ticks, labels)
@@ -217,6 +223,49 @@ _presets = {
         panel_label_fontsize=8,
         panel_label_fontweight="bold",
     ),
+    # Journal-specific presets
+    "cell": Config(
+        font_family="Helvetica",
+        axis_linewidth=0.5,
+        axis_tick_width=0.5,
+        axis_tick_length=2.0,
+        axis_tick_fontsize=6,
+        axis_label_fontsize=7,
+        axis_title_fontsize=7,
+        plot_linewidth=1.0,
+        plot_markersize=3,
+        legend_fontsize=6,
+        panel_label_fontsize=8,
+        panel_label_fontweight="bold",
+    ),
+    "science": Config(
+        font_family="Helvetica",
+        axis_linewidth=0.35,
+        axis_tick_width=0.35,
+        axis_tick_length=1.5,
+        axis_tick_fontsize=5,
+        axis_label_fontsize=6,
+        axis_title_fontsize=6,
+        plot_linewidth=0.75,
+        plot_markersize=2.5,
+        legend_fontsize=5,
+        panel_label_fontsize=7,
+        panel_label_fontweight="bold",
+    ),
+    "pnas": Config(
+        font_family="Arial",
+        axis_linewidth=0.5,
+        axis_tick_width=0.5,
+        axis_tick_length=2.0,
+        axis_tick_fontsize=6,
+        axis_label_fontsize=8,
+        axis_title_fontsize=8,
+        plot_linewidth=1.0,
+        plot_markersize=3,
+        legend_fontsize=6,
+        panel_label_fontsize=9,
+        panel_label_fontweight="bold",
+    ),
 }
 
 
@@ -228,14 +277,21 @@ def use_preset(name: str) -> None:
         name: Preset name
 
     Available presets:
+        General:
         - "publication": Standard publication (default)
         - "poster": Large fonts/lines for posters
         - "presentation": Medium for slides
         - "minimal": Thin lines, small fonts
+
+        Journal-specific:
         - "nature": Nature journal style
+        - "cell": Cell journal style (Helvetica)
+        - "science": Science journal style (Helvetica, very thin)
+        - "pnas": PNAS journal style
 
     Example:
         yp.use_preset("publication")
+        yp.use_preset("cell")
     """
     global _config
     if name not in _presets:

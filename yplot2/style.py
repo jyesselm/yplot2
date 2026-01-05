@@ -5,13 +5,49 @@ All functions use global config defaults when parameters aren't specified.
 Any parameter can be overridden per-panel.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple, Union
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
+import matplotlib.font_manager as fm
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from .config import get_config
+
+
+def _should_preserve_font(current_font: str, preserve_list: Tuple[str, ...]) -> bool:
+    """Check if a font should be preserved (not overwritten)."""
+    if not preserve_list:
+        return False
+    # Case-insensitive comparison
+    current_lower = current_font.lower()
+    return any(font.lower() in current_lower or current_lower in font.lower()
+               for font in preserve_list)
+
+
+def _resolve_font_family(font_family: Union[str, Tuple[str, ...]]) -> str:
+    """
+    Resolve a font family, supporting fallback chains.
+
+    Args:
+        font_family: Single font name or tuple of fonts to try in order
+
+    Returns:
+        The first available font from the chain, or the first font if none found
+    """
+    if isinstance(font_family, str):
+        return font_family
+
+    # Get list of available fonts
+    available_fonts = set(f.name for f in fm.fontManager.ttflist)
+
+    # Try each font in the chain
+    for font in font_family:
+        if font in available_fonts:
+            return font
+
+    # Return first font as fallback (matplotlib will handle missing fonts)
+    return font_family[0] if font_family else "Arial"
 
 
 def apply_style(
@@ -30,8 +66,11 @@ def apply_style(
     # Title settings
     axis_title_fontsize: Optional[float] = None,
     axis_title_pad: Optional[float] = None,
-    # Font
-    font_family: Optional[str] = None,
+    # Font settings
+    font_family: Optional[Union[str, Tuple[str, ...]]] = None,
+    apply_fonts: Optional[bool] = None,
+    preserve_font_families: Optional[Tuple[str, ...]] = None,
+    apply_fontsizes: Optional[bool] = None,
 ) -> None:
     """
     Apply styling to a single axes.
@@ -51,7 +90,15 @@ def apply_style(
         axis_label_pad: Axis label padding
         axis_title_fontsize: Title font size
         axis_title_pad: Title padding
-        font_family: Font family for all text
+        font_family: Font family for all text. Can be a string or tuple of
+            fonts to try in order (fallback chain).
+        apply_fonts: Whether to apply font family changes (default: True).
+            Set to False to skip all font changes.
+        preserve_font_families: Tuple of font names to preserve (not override).
+            If a text element already uses one of these fonts, its font won't
+            be changed. Set globally via config.preserve_font_families.
+        apply_fontsizes: Whether to apply font size changes (default: True).
+            Set to False to preserve existing font sizes.
 
     Example:
         # Use global config
@@ -59,6 +106,18 @@ def apply_style(
 
         # Override label size for this panel only
         yp.apply_style(ax, axis_label_fontsize=10)
+
+        # Preserve specific fonts (e.g., Arial MS Unicode for special chars)
+        yp.apply_style(ax, preserve_font_families=("Arial MS Unicode",))
+
+        # Skip all font changes
+        yp.apply_style(ax, apply_fonts=False)
+
+        # Use font fallback chain
+        yp.apply_style(ax, font_family=("Arial", "Helvetica", "sans-serif"))
+
+        # Skip font size changes (preserve manually set sizes)
+        yp.apply_style(ax, apply_fontsizes=False)
     """
     cfg = get_config()
 
@@ -73,7 +132,13 @@ def apply_style(
     axis_label_pad = axis_label_pad if axis_label_pad is not None else cfg.axis_label_pad
     axis_title_fontsize = axis_title_fontsize if axis_title_fontsize is not None else cfg.axis_title_fontsize
     axis_title_pad = axis_title_pad if axis_title_pad is not None else cfg.axis_title_pad
-    font_family = font_family if font_family is not None else cfg.font_family
+
+    # Font settings
+    font_family_raw = font_family if font_family is not None else cfg.font_family
+    font_family = _resolve_font_family(font_family_raw)
+    apply_fonts = apply_fonts if apply_fonts is not None else cfg.apply_fonts
+    preserve_fonts = preserve_font_families if preserve_font_families is not None else cfg.preserve_font_families
+    apply_fontsizes = apply_fontsizes if apply_fontsizes is not None else cfg.apply_fontsizes
 
     # Set spine line widths
     for spine in ax.spines.values():
@@ -88,25 +153,35 @@ def apply_style(
     )
 
     # Set axis label properties
-    ax.xaxis.label.set_fontsize(axis_label_fontsize)
-    ax.yaxis.label.set_fontsize(axis_label_fontsize)
-    ax.xaxis.label.set_fontname(font_family)
-    ax.yaxis.label.set_fontname(font_family)
+    if apply_fontsizes:
+        ax.xaxis.label.set_fontsize(axis_label_fontsize)
+        ax.yaxis.label.set_fontsize(axis_label_fontsize)
+    if apply_fonts:
+        if not _should_preserve_font(ax.xaxis.label.get_fontname(), preserve_fonts):
+            ax.xaxis.label.set_fontname(font_family)
+        if not _should_preserve_font(ax.yaxis.label.get_fontname(), preserve_fonts):
+            ax.yaxis.label.set_fontname(font_family)
     ax.xaxis.labelpad = axis_label_pad
     ax.yaxis.labelpad = axis_label_pad
 
     # Set title properties
-    ax.title.set_fontsize(axis_title_fontsize)
-    ax.title.set_fontname(font_family)
+    if apply_fontsizes:
+        ax.title.set_fontsize(axis_title_fontsize)
+    if apply_fonts and not _should_preserve_font(ax.title.get_fontname(), preserve_fonts):
+        ax.title.set_fontname(font_family)
 
     # Set tick label fonts
     for label in ax.get_xticklabels():
-        label.set_fontname(font_family)
-        label.set_fontsize(axis_tick_fontsize)
+        if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
+            label.set_fontname(font_family)
+        if apply_fontsizes:
+            label.set_fontsize(axis_tick_fontsize)
 
     for label in ax.get_yticklabels():
-        label.set_fontname(font_family)
-        label.set_fontsize(axis_tick_fontsize)
+        if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
+            label.set_fontname(font_family)
+        if apply_fontsizes:
+            label.set_fontsize(axis_tick_fontsize)
 
 
 def apply_style_to_all(
