@@ -67,7 +67,8 @@ class Config:
     # =========================================================================
     panel_label_fontsize: float = 12
     panel_label_fontweight: str = "bold"
-    panel_label_offset: Tuple[float, float] = (-0.4, 0.15)  # (dx, dy) inches
+    panel_label_offset: Tuple[float, float] = (-0.4, 0.15)  # (dx, dy) inches for plots
+    panel_label_offset_image: Tuple[float, float] = (0.05, 0.15)  # (dx, dy) inches for images
 
     # =========================================================================
     # Colorbar settings

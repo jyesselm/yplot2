@@ -77,6 +77,66 @@ k = yp.same_size(a, left=4.0, bottom=1.0)
 l = yp.resize(a, width=3.0, anchor="center")
 ```
 
+## Layout Class (Recommended)
+
+For figures with mixed image and plot panels, use the `Layout` class for smarter label positioning:
+
+```python
+import yplot2 as yp
+
+# Create layout with figure size
+layout = yp.Layout(fig_size=(7.0, 5.0))
+
+# Add panels with type information
+a = yp.Coord(left=0.5, bottom=1.5, width=2.5, height=2.5)
+b = yp.right_of(a, spacing=0.5)
+
+layout.add_image(a, name="structure")   # Image panel
+layout.add_plot(b, name="scatter")      # Plot panel
+
+# Create figure
+fig, axes = layout.create_figure()
+
+# Use panels
+yp.load_image(axes[0], "structure.png")
+yp.scatter(axes[1], x, y)
+yp.apply_style(axes[1])
+
+# Smart labels - different offset for images vs plots
+layout.add_labels()  # "A" closer to image edge, "B" offset for y-axis
+
+fig.savefig("figure.png", dpi=300)
+```
+
+### Layout Features
+
+```python
+# Method chaining
+layout = (yp.Layout(fig_size=(7.0, 5.0))
+    .add_image(a, name="img1")
+    .add_plot(b, name="plot1")
+    .add_plot(c, name="plot2"))
+
+# Access panels by name
+ax = layout.get_ax("scatter")
+panel = layout.get_panel("structure")
+
+# Filter by type
+layout.plot_axes   # List of plot axes only
+layout.image_axes  # List of image axes only
+
+# All coords/panels
+layout.coords      # List of Coord objects
+layout.panels      # List of Panel objects
+
+# Debug helpers
+layout.draw_debug_boxes()
+
+# Reset to recreate figure
+layout.reset()
+fig, axes = layout.create_figure()
+```
+
 ### Generators
 
 Create rows, columns, or grids:
@@ -183,7 +243,8 @@ yp.reset_config()
 | **Panel Labels** | | |
 | `panel_label_fontsize` | 12 | A, B, C label size |
 | `panel_label_fontweight` | "bold" | A, B, C label weight |
-| `panel_label_offset` | (-0.4, 0.15) | Label offset (dx, dy) inches |
+| `panel_label_offset` | (-0.4, 0.15) | Label offset for plots (dx, dy) inches |
+| `panel_label_offset_image` | (0.05, 0.15) | Label offset for images (dx, dy) inches |
 | **Colorbar** | | |
 | `colorbar_width` | 0.1 | Colorbar width (inches) |
 | `colorbar_pad` | 0.05 | Colorbar padding (inches) |
@@ -222,8 +283,22 @@ yp.fill_between(ax, x, y-err, y+err, alpha=0.3)
 yp.hline(ax, y=0, color='gray', linestyle='--')
 yp.vline(ax, x=5, color='gray', linestyle='--')
 
-# Text
-yp.text(ax, 0.5, 0.5, "Label", fontsize=10)
+# Text with named positions
+yp.text(ax, "n = 100", pos="top left")
+yp.text(ax, "p < 0.05", pos="tr")  # Alias for "top right"
+yp.text(ax, "R² = 0.95", pos="bottom right", fontweight="bold")
+
+# Text with box
+yp.text(ax, "Important", pos="center", box=True)
+
+# Custom position (x, y in axes coordinates 0-1)
+yp.text(ax, "Custom", pos=(0.5, 0.8))
+
+# Available positions:
+# Corners: 'top left' (tl), 'top right' (tr), 'bottom left' (bl), 'bottom right' (br)
+# Edges: 'top', 'bottom', 'left', 'right'
+# Center: 'center'
+# Outside: 'above', 'below'
 ```
 
 ## Specialized Plots
@@ -275,6 +350,14 @@ yp.remove_spines(ax, ['top', 'right'])
 
 # Add styled legend
 yp.add_legend(ax, ['Label 1', 'Label 2'], loc='upper right')
+
+# Set background color (useful for debugging layout)
+yp.set_background(ax, "lightgray")
+yp.set_background_all(axes, "lightyellow")
+
+# Draw border around entire figure
+yp.draw_figure_border(fig)
+yp.draw_figure_border(fig, linewidth=2, color="gray")
 ```
 
 ## Shared Axes
@@ -461,6 +544,21 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `column(n, size, spacing, left, top)` - Generate column of panels
 - `grid(rows, cols, size, hspace, vspace, left, top)` - Generate grid
 
+### Layout
+- `Layout(fig_size, dpi)` - Layout manager for mixed image/plot figures
+- `Layout.add(coord, panel_type, name)` - Add panel ("plot" or "image")
+- `Layout.add_plot(coord, name)` - Add plot panel
+- `Layout.add_image(coord, name)` - Add image panel
+- `Layout.create_figure()` - Create figure and axes
+- `Layout.add_labels(start)` - Add type-aware panel labels
+- `Layout.get_ax(name)` - Get axes by name
+- `Layout.get_panel(name)` - Get Panel by name
+- `Layout.plot_axes` - List of plot axes
+- `Layout.image_axes` - List of image axes
+- `Layout.draw_debug_boxes()` - Draw debug boxes
+- `Layout.reset()` - Reset to recreate figure
+- `Panel(coord, panel_type, name, label)` - Panel metadata container
+
 ### Positioning
 - `right_of(ref, spacing, ...)` - Panel to the right
 - `left_of(ref, spacing, ...)` - Panel to the left
@@ -485,6 +583,7 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `make_image_panel(ax)` - Prepare for edge-to-edge content
 - `add_labels(fig, coords, fig_size, start)` - Add panel labels
 - `draw_debug_boxes(fig, coords, fig_size)` - Debug visualization
+- `draw_figure_border(fig, linewidth, color)` - Draw border around figure
 
 ### Config
 - `set_config(**kwargs)` - Set config values
@@ -503,7 +602,7 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `boxplot(ax, x, ...)` - Box plot
 - `hline(ax, y, ...)` - Horizontal line
 - `vline(ax, x, ...)` - Vertical line
-- `text(ax, x, y, s, ...)` - Text annotation
+- `text(ax, text, pos, ...)` - Text at named position ('top left', 'center', etc.)
 
 ### Plotting (Specialized)
 - `lollipop(ax, x, y1, y2, ...)` - Paired lollipop plot
@@ -515,10 +614,12 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `colors_for_sequence(seq)` - Get nucleotide colors (A=red, C=blue, G=orange, T/U=green)
 
 ### Styling
+- `apply_style(ax, ...)` - Apply style to one axes
 - `apply_style_to_all(axes)` - Apply style to all axes
-- `publication_style(ax, ...)` - Apply style to one axes
 - `remove_spines(ax, spines)` - Remove axis spines
 - `add_legend(ax, labels, ...)` - Add styled legend
+- `set_background(ax, color)` - Set axes background color
+- `set_background_all(axes, color)` - Set background for all axes
 
 ### Shared Axes
 - `share_x(axes_list)` - Share x-axis (hide labels)

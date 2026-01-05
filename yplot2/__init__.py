@@ -48,6 +48,9 @@ from .coordinates import Coord
 # Coordinate generators
 from .coordinates import row, column, grid, flatten_grid
 
+# Layout management
+from .layout import Layout, Panel
+
 # Relative positioning helpers
 from .position import (
     right_of,
@@ -156,6 +159,9 @@ __all__ = [
     "list_presets",
     # Core type
     "Coord",
+    # Layout
+    "Layout",
+    "Panel",
     # Generators
     "row",
     "column",
