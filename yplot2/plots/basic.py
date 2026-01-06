@@ -7,7 +7,6 @@ from typing import Optional, Union, List
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.transforms import ScaledTranslation
-from matplotlib import rcParams
 
 from ..config import get_config
 
