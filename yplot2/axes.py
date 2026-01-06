@@ -20,19 +20,23 @@ def share_x(
     axes_list: List[Axes],
     label: Optional[str] = None,
     keep_labels: str = "bottom",
+    label_offset: float = 0.35,
 ) -> None:
     """
     Link axes to share x-axis. Hides redundant tick labels.
 
     Args:
-        axes_list: List of Axes that share x-axis (should be in a column)
-        label: Optional shared x-axis label (added to bottom axes only)
+        axes_list: List of Axes that share x-axis (should be in a row)
+        label: Optional shared x-axis label (centered across all axes)
         keep_labels: Which axes keeps tick labels: "bottom", "top", "all", "none"
+        label_offset: Distance of label from bottom axis in inches
     """
     if not axes_list:
         return
 
-    # Find the bottom-most axes (lowest position)
+    cfg = get_config()
+
+    # Find the bottom-most and top-most axes
     bottom_ax = min(axes_list, key=lambda ax: ax.get_position().y0)
     top_ax = max(axes_list, key=lambda ax: ax.get_position().y0)
 
@@ -46,31 +50,54 @@ def share_x(
         elif keep_labels == "none":
             ax.tick_params(labelbottom=False)
             ax.set_xlabel("")
+        elif keep_labels == "all":
+            ax.set_xlabel("")  # Clear individual labels, will add shared one
 
     if label:
-        if keep_labels == "top":
-            top_ax.set_xlabel(label)
-        else:
-            bottom_ax.set_xlabel(label)
+        # Get figure and calculate centered position
+        fig = axes_list[0].get_figure()
+        fig_width, fig_height = fig.get_size_inches()
+
+        # Get positions of all axes in figure coordinates
+        positions = [ax.get_position() for ax in axes_list]
+        left = min(p.x0 for p in positions)
+        right = max(p.x1 for p in positions)
+        bottom = min(p.y0 for p in positions)
+
+        # Center x position, offset y position
+        center_x = (left + right) / 2
+        y_pos = bottom - (label_offset / fig_height)
+
+        fig.text(
+            center_x, y_pos, label,
+            fontsize=cfg.x_axis_label_fontsize,
+            fontname=cfg.font_family,
+            ha="center",
+            va="top",
+        )
 
 
 def share_y(
     axes_list: List[Axes],
     label: Optional[str] = None,
     keep_labels: str = "left",
+    label_offset: float = 0.35,
 ) -> None:
     """
     Link axes to share y-axis. Hides redundant tick labels.
 
     Args:
-        axes_list: List of Axes that share y-axis (should be in a row)
-        label: Optional shared y-axis label (added to leftmost axes only)
+        axes_list: List of Axes that share y-axis (should be in a column)
+        label: Optional shared y-axis label (centered across all axes)
         keep_labels: Which axes keeps tick labels: "left", "right", "all", "none"
+        label_offset: Distance of label from leftmost axis in inches
     """
     if not axes_list:
         return
 
-    # Find the leftmost axes
+    cfg = get_config()
+
+    # Find the leftmost and rightmost axes
     left_ax = min(axes_list, key=lambda ax: ax.get_position().x0)
     right_ax = max(axes_list, key=lambda ax: ax.get_position().x0)
 
@@ -84,12 +111,32 @@ def share_y(
         elif keep_labels == "none":
             ax.tick_params(labelleft=False)
             ax.set_ylabel("")
+        elif keep_labels == "all":
+            ax.set_ylabel("")  # Clear individual labels, will add shared one
 
     if label:
-        if keep_labels == "right":
-            right_ax.set_ylabel(label)
-        else:
-            left_ax.set_ylabel(label)
+        # Get figure and calculate centered position
+        fig = axes_list[0].get_figure()
+        fig_width, fig_height = fig.get_size_inches()
+
+        # Get positions of all axes in figure coordinates
+        positions = [ax.get_position() for ax in axes_list]
+        left = min(p.x0 for p in positions)
+        bottom = min(p.y0 for p in positions)
+        top = max(p.y1 for p in positions)
+
+        # Center y position, offset x position
+        x_pos = left - (label_offset / fig_width)
+        center_y = (bottom + top) / 2
+
+        fig.text(
+            x_pos, center_y, label,
+            fontsize=cfg.y_axis_label_fontsize,
+            fontname=cfg.font_family,
+            ha="center",
+            va="center",
+            rotation=90,
+        )
 
 
 def sync_limits(
