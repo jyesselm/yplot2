@@ -245,6 +245,61 @@ def remove_spines(
         ax.spines[spine].set_visible(False)
 
 
+def clear_axes(
+    ax: Axes,
+    keep_spines: bool = False,
+) -> None:
+    """
+    Remove all axis elements (ticks, labels, spines).
+
+    Useful for image panels or completely clean axes.
+
+    Args:
+        ax: Axes object
+        keep_spines: If True, keep the spines visible (default: False)
+
+    Example:
+        # For an image panel
+        yp.load_image(ax, "image.png")
+        yp.clear_axes(ax)
+
+        # Keep the border/spines
+        yp.clear_axes(ax, keep_spines=True)
+    """
+    # Remove ticks and tick labels
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+
+    # Remove axis labels
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+    # Remove spines unless requested to keep
+    if not keep_spines:
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+
+def clear_axes_all(
+    axes: List[Axes],
+    keep_spines: bool = False,
+) -> None:
+    """
+    Remove all axis elements from multiple axes.
+
+    Args:
+        axes: List of Axes objects
+        keep_spines: If True, keep the spines visible (default: False)
+
+    Example:
+        yp.clear_axes_all(image_axes)
+    """
+    for ax in axes:
+        clear_axes(ax, keep_spines=keep_spines)
+
+
 def add_legend(
     ax: Axes,
     labels: List[str],

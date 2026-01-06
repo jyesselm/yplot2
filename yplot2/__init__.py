@@ -110,6 +110,8 @@ from .style import (
     apply_style_to_all,
     publication_style,  # alias for apply_style
     remove_spines,
+    clear_axes,
+    clear_axes_all,
     add_legend,
     add_legend_above,
     set_xlabel,
@@ -214,6 +216,8 @@ __all__ = [
     "apply_style_to_all",
     "publication_style",
     "remove_spines",
+    "clear_axes",
+    "clear_axes_all",
     "add_legend",
     "add_legend_above",
     "set_xlabel",
