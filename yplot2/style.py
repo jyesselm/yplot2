@@ -220,7 +220,7 @@ def apply_style_to_all(
 
     Example:
         yp.apply_style_to_all(axes)
-        yp.apply_style_to_all(axes, axis_label_fontsize=10)
+        yp.apply_style_to_all(axes, x_axis_label_fontsize=10)
     """
     for ax in axes:
         apply_style(ax, **kwargs)
@@ -529,12 +529,12 @@ def set_xlabel(
     Args:
         ax: Axes object
         label: Label text
-        fontsize: Font size (default: config.axis_label_fontsize)
+        fontsize: Font size (default: config.x_axis_label_fontsize)
         fontname: Font family (default: config.font_family)
         **kwargs: Additional args to ax.set_xlabel()
     """
     cfg = get_config()
-    fontsize = fontsize if fontsize is not None else cfg.axis_label_fontsize
+    fontsize = fontsize if fontsize is not None else cfg.x_axis_label_fontsize
     fontname = fontname if fontname is not None else cfg.font_family
     ax.set_xlabel(label, fontsize=fontsize, fontname=fontname, **kwargs)
 
@@ -552,12 +552,12 @@ def set_ylabel(
     Args:
         ax: Axes object
         label: Label text
-        fontsize: Font size (default: config.axis_label_fontsize)
+        fontsize: Font size (default: config.y_axis_label_fontsize)
         fontname: Font family (default: config.font_family)
         **kwargs: Additional args to ax.set_ylabel()
     """
     cfg = get_config()
-    fontsize = fontsize if fontsize is not None else cfg.axis_label_fontsize
+    fontsize = fontsize if fontsize is not None else cfg.y_axis_label_fontsize
     fontname = fontname if fontname is not None else cfg.font_family
     ax.set_ylabel(label, fontsize=fontsize, fontname=fontname, **kwargs)
 

@@ -380,7 +380,7 @@ def sequence_x_axis(
     """
     cfg = get_config()
     ax.set_xticks(range(len(sequence)))
-    ax.set_xticklabels(list(sequence), fontsize=cfg.axis_tick_fontsize,
+    ax.set_xticklabels(list(sequence), fontsize=cfg.x_axis_tick_fontsize,
                        fontname=cfg.font_family)
     ax.set_xlim(-x_delta, len(sequence) - 1 + x_delta)
     return ax
@@ -408,7 +408,7 @@ def structure_x_axis(
     """
     cfg = get_config()
     ax.set_xticks(range(len(structure)))
-    ax.set_xticklabels(list(structure), fontsize=cfg.axis_tick_fontsize,
+    ax.set_xticklabels(list(structure), fontsize=cfg.x_axis_tick_fontsize,
                        fontname=cfg.font_family)
     ax.set_xlim(-x_delta, len(structure) - 1 + x_delta)
     return ax
@@ -441,7 +441,7 @@ def sequence_structure_x_axis(
     cfg = get_config()
     labels = [f"{seq}\n{struct}" for seq, struct in zip(sequence, structure)]
     ax.set_xticks(range(len(sequence)))
-    ax.set_xticklabels(labels, fontsize=cfg.axis_tick_fontsize,
+    ax.set_xticklabels(labels, fontsize=cfg.x_axis_tick_fontsize,
                        fontname=cfg.font_family)
     ax.set_xlim(-x_delta, len(sequence) - 1 + x_delta)
     return ax

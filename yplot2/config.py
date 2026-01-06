@@ -111,7 +111,7 @@ def set_config(**kwargs) -> None:
         **kwargs: Any Config field name and value
 
     Example:
-        yp.set_config(font_family="Helvetica", axis_label_fontsize=10)
+        yp.set_config(font_family="Helvetica", x_axis_label_fontsize=10)
     """
     global _config
     for key, value in kwargs.items():

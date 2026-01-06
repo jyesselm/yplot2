@@ -45,7 +45,7 @@ def _apply_x_axis_by_name(
                         f"Use 'sequence_structure', 'sequence', or 'structure'.")
 
     ax.set_xticks(range(n))
-    ax.set_xticklabels(labels, fontsize=cfg.axis_tick_fontsize,
+    ax.set_xticklabels(labels, fontsize=cfg.x_axis_tick_fontsize,
                        fontname=cfg.font_family)
 
 
