@@ -446,7 +446,7 @@ def text(
         text: Text string to display.
         pos: Position name ('top left', 'center', etc.), alias ('tl', 'tr'),
             or tuple of (x, y) in axes coordinates.
-        fontsize: Font size (defaults to rcParams).
+        fontsize: Font size (default: config.text_fontsize).
         offset: Offset from edge in points (1 point = 1/72 inch).
             Overrides default offset. Default is 4 points.
         box: If True, draw a box around the text.
@@ -473,8 +473,9 @@ def text(
         >>> text(ax, "Custom", pos=(0.5, 0.8))
         >>> text(ax, "More offset", pos="top left", offset=10)
     """
-    fontsize = fontsize or rcParams["font.size"]
-    fontfamily = kwargs.pop("fontfamily", None) or kwargs.pop("fontname", None) or rcParams["font.family"]
+    cfg = get_config()
+    fontsize = fontsize if fontsize is not None else cfg.text_fontsize
+    fontfamily = kwargs.pop("fontfamily", None) or kwargs.pop("fontname", None) or cfg.font_family
     fig = ax.get_figure()
 
     # Resolve position

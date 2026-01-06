@@ -79,6 +79,11 @@ class Config:
     legend_labelspacing: float = 0.15
 
     # =========================================================================
+    # Text settings (for yp.text annotations)
+    # =========================================================================
+    text_fontsize: float = 6
+
+    # =========================================================================
     # Panel label settings (A, B, C, ...)
     # =========================================================================
     panel_label_fontsize: float = 12
@@ -159,7 +164,7 @@ def print_config() -> None:
             groups[prefix] = []
         groups[prefix].append(key)
 
-    for prefix in ['font', 'axis', 'plot', 'legend', 'panel', 'colorbar']:
+    for prefix in ['font', 'axis', 'plot', 'legend', 'text', 'panel', 'colorbar']:
         if prefix in groups:
             print(f"\n{prefix.upper()}:")
             for key in sorted(groups[prefix]):
