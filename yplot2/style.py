@@ -54,15 +54,22 @@ def apply_style(
     ax: Axes,
     # Axis line (spine) settings
     axis_linewidth: Optional[float] = None,
-    # Tick settings
+    # Tick settings (shared)
     axis_tick_width: Optional[float] = None,
     axis_tick_length: Optional[float] = None,
-    axis_tick_pad: Optional[float] = None,
-    axis_tick_fontsize: Optional[float] = None,
     axis_tick_direction: Optional[str] = None,
-    # Axis label settings
-    axis_label_fontsize: Optional[float] = None,
-    axis_label_pad: Optional[float] = None,
+    # X-axis tick settings
+    x_axis_tick_pad: Optional[float] = None,
+    x_axis_tick_fontsize: Optional[float] = None,
+    # Y-axis tick settings
+    y_axis_tick_pad: Optional[float] = None,
+    y_axis_tick_fontsize: Optional[float] = None,
+    # X-axis label settings
+    x_axis_label_fontsize: Optional[float] = None,
+    x_axis_label_pad: Optional[float] = None,
+    # Y-axis label settings
+    y_axis_label_fontsize: Optional[float] = None,
+    y_axis_label_pad: Optional[float] = None,
     # Title settings
     axis_title_fontsize: Optional[float] = None,
     axis_title_pad: Optional[float] = None,
@@ -83,11 +90,15 @@ def apply_style(
         axis_linewidth: Spine line width
         axis_tick_width: Tick mark width
         axis_tick_length: Tick mark length
-        axis_tick_pad: Padding between tick and label
-        axis_tick_fontsize: Tick label font size
         axis_tick_direction: Tick direction ("in", "out", "inout")
-        axis_label_fontsize: Axis label (xlabel/ylabel) font size
-        axis_label_pad: Axis label padding
+        x_axis_tick_pad: X-axis tick padding
+        x_axis_tick_fontsize: X-axis tick label font size
+        y_axis_tick_pad: Y-axis tick padding
+        y_axis_tick_fontsize: Y-axis tick label font size
+        x_axis_label_fontsize: X-axis label font size
+        x_axis_label_pad: X-axis label padding
+        y_axis_label_fontsize: Y-axis label font size
+        y_axis_label_pad: Y-axis label padding
         axis_title_fontsize: Title font size
         axis_title_pad: Title padding
         font_family: Font family for all text. Can be a string or tuple of
@@ -104,20 +115,14 @@ def apply_style(
         # Use global config
         yp.apply_style(ax)
 
-        # Override label size for this panel only
-        yp.apply_style(ax, axis_label_fontsize=10)
+        # Different font sizes for x and y labels
+        yp.apply_style(ax, x_axis_label_fontsize=10, y_axis_label_fontsize=8)
 
-        # Preserve specific fonts (e.g., Arial MS Unicode for special chars)
-        yp.apply_style(ax, preserve_font_families=("Arial MS Unicode",))
+        # Preserve specific fonts (e.g., Arial Unicode MS for special chars)
+        yp.apply_style(ax, preserve_font_families=("Arial Unicode MS",))
 
         # Skip all font changes
         yp.apply_style(ax, apply_fonts=False)
-
-        # Use font fallback chain
-        yp.apply_style(ax, font_family=("Arial", "Helvetica", "sans-serif"))
-
-        # Skip font size changes (preserve manually set sizes)
-        yp.apply_style(ax, apply_fontsizes=False)
     """
     cfg = get_config()
 
@@ -125,11 +130,21 @@ def apply_style(
     axis_linewidth = axis_linewidth if axis_linewidth is not None else cfg.axis_linewidth
     axis_tick_width = axis_tick_width if axis_tick_width is not None else cfg.axis_tick_width
     axis_tick_length = axis_tick_length if axis_tick_length is not None else cfg.axis_tick_length
-    axis_tick_pad = axis_tick_pad if axis_tick_pad is not None else cfg.axis_tick_pad
-    axis_tick_fontsize = axis_tick_fontsize if axis_tick_fontsize is not None else cfg.axis_tick_fontsize
     axis_tick_direction = axis_tick_direction if axis_tick_direction is not None else cfg.axis_tick_direction
-    axis_label_fontsize = axis_label_fontsize if axis_label_fontsize is not None else cfg.axis_label_fontsize
-    axis_label_pad = axis_label_pad if axis_label_pad is not None else cfg.axis_label_pad
+
+    # X-axis settings
+    x_axis_tick_pad = x_axis_tick_pad if x_axis_tick_pad is not None else cfg.x_axis_tick_pad
+    x_axis_tick_fontsize = x_axis_tick_fontsize if x_axis_tick_fontsize is not None else cfg.x_axis_tick_fontsize
+    x_axis_label_fontsize = x_axis_label_fontsize if x_axis_label_fontsize is not None else cfg.x_axis_label_fontsize
+    x_axis_label_pad = x_axis_label_pad if x_axis_label_pad is not None else cfg.x_axis_label_pad
+
+    # Y-axis settings
+    y_axis_tick_pad = y_axis_tick_pad if y_axis_tick_pad is not None else cfg.y_axis_tick_pad
+    y_axis_tick_fontsize = y_axis_tick_fontsize if y_axis_tick_fontsize is not None else cfg.y_axis_tick_fontsize
+    y_axis_label_fontsize = y_axis_label_fontsize if y_axis_label_fontsize is not None else cfg.y_axis_label_fontsize
+    y_axis_label_pad = y_axis_label_pad if y_axis_label_pad is not None else cfg.y_axis_label_pad
+
+    # Title settings
     axis_title_fontsize = axis_title_fontsize if axis_title_fontsize is not None else cfg.axis_title_fontsize
     axis_title_pad = axis_title_pad if axis_title_pad is not None else cfg.axis_title_pad
 
@@ -144,25 +159,33 @@ def apply_style(
     for spine in ax.spines.values():
         spine.set_linewidth(axis_linewidth)
 
-    # Set tick parameters
+    # Set tick parameters separately for x and y
     ax.tick_params(
+        axis='x',
         width=axis_tick_width,
         length=axis_tick_length,
-        pad=axis_tick_pad,
+        pad=x_axis_tick_pad,
+        direction=axis_tick_direction,
+    )
+    ax.tick_params(
+        axis='y',
+        width=axis_tick_width,
+        length=axis_tick_length,
+        pad=y_axis_tick_pad,
         direction=axis_tick_direction,
     )
 
     # Set axis label properties
     if apply_fontsizes:
-        ax.xaxis.label.set_fontsize(axis_label_fontsize)
-        ax.yaxis.label.set_fontsize(axis_label_fontsize)
+        ax.xaxis.label.set_fontsize(x_axis_label_fontsize)
+        ax.yaxis.label.set_fontsize(y_axis_label_fontsize)
     if apply_fonts:
         if not _should_preserve_font(ax.xaxis.label.get_fontname(), preserve_fonts):
             ax.xaxis.label.set_fontname(font_family)
         if not _should_preserve_font(ax.yaxis.label.get_fontname(), preserve_fonts):
             ax.yaxis.label.set_fontname(font_family)
-    ax.xaxis.labelpad = axis_label_pad
-    ax.yaxis.labelpad = axis_label_pad
+    ax.xaxis.labelpad = x_axis_label_pad
+    ax.yaxis.labelpad = y_axis_label_pad
 
     # Set title properties
     if apply_fontsizes:
@@ -175,13 +198,13 @@ def apply_style(
         if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
             label.set_fontname(font_family)
         if apply_fontsizes:
-            label.set_fontsize(axis_tick_fontsize)
+            label.set_fontsize(x_axis_tick_fontsize)
 
     for label in ax.get_yticklabels():
         if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
             label.set_fontname(font_family)
         if apply_fontsizes:
-            label.set_fontsize(axis_tick_fontsize)
+            label.set_fontsize(y_axis_tick_fontsize)
 
 
 def apply_style_to_all(
@@ -284,6 +307,209 @@ def add_legend(
         borderaxespad=-0.10,
         prop=font_props,
         labelspacing=legend_labelspacing,
+        **kwargs,
+    )
+
+    return legend
+
+
+def add_legend_above(
+    ax: Axes,
+    labels: List[str],
+    colors: Optional[List[str]] = None,
+    # Position (in inches - absolute positioning)
+    x_offset: float = 0.0,
+    y_offset: float = 0.080,
+    anchor: str = "upper right",
+    # Layout
+    ncol: Optional[int] = None,
+    columnspacing: float = 0.8,
+    # Styling (override config)
+    legend_fontsize: Optional[float] = None,
+    legend_frameon: Optional[bool] = None,
+    legend_handlelength: Optional[float] = None,
+    legend_labelspacing: Optional[float] = None,
+    handletextpad: float = 0.4,
+    font_family: Optional[str] = None,
+    linewidth: Optional[float] = None,
+    # Marker settings - can be single value or list per label
+    marker: Optional[Union[str, List[str]]] = None,
+    markersize: Optional[Union[float, List[float]]] = None,
+    markerfacecolor: Optional[Union[str, List[str]]] = None,
+    markeredgecolor: Optional[Union[str, List[str]]] = None,
+    markeredgewidth: Optional[Union[float, List[float]]] = None,
+    linestyle: Union[str, List[str]] = "-",
+    **kwargs,
+):
+    """
+    Add a legend above the subplot.
+
+    Places the legend outside the axes, above the plot area.
+    Highly customizable positioning and styling.
+
+    Args:
+        ax: Axes object
+        labels: List of label strings
+        colors: List of colors (default: use color cycle)
+
+        Position args:
+            x_offset: Horizontal offset in inches (absolute positioning)
+            y_offset: Vertical offset above axes top in inches (absolute positioning)
+            anchor: Legend anchor point. Options:
+                - "upper right" (default): legend expands left
+                - "upper left": legend expands right
+                - "upper center": legend expands both directions
+
+        Layout args:
+            ncol: Number of columns (default: len(labels) for horizontal)
+            columnspacing: Gap between columns
+
+        Styling args (default from config):
+            legend_fontsize: Font size
+            legend_frameon: Show frame
+            legend_handlelength: Handle length
+            legend_labelspacing: Vertical spacing between entries
+            handletextpad: Gap between handle and text
+            font_family: Font family
+            linewidth: Line width for handles
+
+        Marker args (single value or list per label):
+            marker: Marker style (e.g., 'o', 's', ['o', 'o'])
+            markersize: Marker size
+            markerfacecolor: Fill color (e.g., 'red', 'white', ['red', 'white'])
+            markeredgecolor: Edge color (defaults to colors if not set)
+            markeredgewidth: Edge line width
+            linestyle: Line style (default: '-', use '' or 'none' for no line)
+
+        **kwargs: Additional args passed to ax.legend()
+
+    Returns:
+        Legend object
+
+    Examples:
+        # Simple horizontal legend above plot
+        yp.add_legend_above(ax, ["WT", "Mutant"], ["blue", "red"])
+
+        # Filled and unfilled markers (red sphere, white sphere with red edge)
+        yp.add_legend_above(
+            ax, ["WT", "UUCG"], ["red", "red"],
+            marker="o",
+            markerfacecolor=["red", "white"],
+            linestyle="none"
+        )
+
+        # Different markers per label
+        yp.add_legend_above(
+            ax, ["Data", "Fit"], ["blue", "red"],
+            marker=["o", "none"],
+            linestyle=["none", "-"]
+        )
+
+        # Centered above plot
+        yp.add_legend_above(ax, labels, colors, anchor="upper center")
+
+        # With markers and lines
+        yp.add_legend_above(ax, labels, colors, marker="o", markersize=4)
+    """
+    cfg = get_config()
+
+    # Get values from config
+    legend_fontsize = legend_fontsize if legend_fontsize is not None else cfg.legend_fontsize
+    legend_frameon = legend_frameon if legend_frameon is not None else cfg.legend_frameon
+    legend_handlelength = legend_handlelength if legend_handlelength is not None else cfg.legend_handlelength
+    legend_labelspacing = legend_labelspacing if legend_labelspacing is not None else cfg.legend_labelspacing
+    font_family = font_family if font_family is not None else cfg.font_family
+    linewidth = linewidth if linewidth is not None else cfg.axis_linewidth
+
+    # Default to horizontal layout
+    if ncol is None:
+        ncol = len(labels)
+
+    # Default colors from color cycle
+    if colors is None:
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    n_labels = len(labels)
+
+    # Helper to expand single value to list
+    def expand(val, default=None):
+        if val is None:
+            return [default] * n_labels
+        if isinstance(val, list):
+            return val
+        return [val] * n_labels
+
+    # Expand all marker properties to lists
+    markers = expand(marker)
+    markersizes = expand(markersize)
+    markerfacecolors = expand(markerfacecolor)
+    markeredgecolors = expand(markeredgecolor)
+    markeredgewidths = expand(markeredgewidth)
+    linestyles = expand(linestyle, "-")
+
+    # Build handles
+    handles = []
+    for i, (label, color) in enumerate(zip(labels, colors)):
+        # Default edge color to the main color if not specified
+        mec = markeredgecolors[i] if markeredgecolors[i] is not None else color
+        # Default face color to the main color if not specified
+        mfc = markerfacecolors[i] if markerfacecolors[i] is not None else color
+
+        handle = mlines.Line2D(
+            [], [],
+            color=color,
+            lw=linewidth,
+            linestyle=linestyles[i],
+            marker=markers[i],
+            markersize=markersizes[i],
+            markerfacecolor=mfc,
+            markeredgecolor=mec,
+            markeredgewidth=markeredgewidths[i],
+            label=label,
+        )
+        handles.append(handle)
+
+    # Font properties
+    font_props = {"family": font_family, "size": legend_fontsize}
+
+    # Convert inches to axes coordinates for absolute positioning
+    fig = ax.get_figure()
+    bbox = ax.get_position()
+    fig_width, fig_height = fig.get_size_inches()
+    ax_width_inches = bbox.width * fig_width
+    ax_height_inches = bbox.height * fig_height
+
+    # Convert inch offsets to axes fraction
+    x_offset_axes = x_offset / ax_width_inches if ax_width_inches > 0 else 0
+    y_offset_axes = y_offset / ax_height_inches if ax_height_inches > 0 else 0
+
+    # Calculate position based on anchor
+    if anchor == "upper right":
+        x_position = 1.0 + x_offset_axes
+    elif anchor == "upper left":
+        x_position = 0.0 + x_offset_axes
+    elif anchor == "upper center":
+        x_position = 0.5 + x_offset_axes
+    else:
+        # Custom anchor - use x_offset directly as axes fraction
+        x_position = x_offset_axes
+
+    y_position = 1.0 + y_offset_axes
+
+    legend = ax.legend(
+        handles=handles,
+        frameon=legend_frameon,
+        loc=anchor,
+        bbox_to_anchor=(x_position, y_position),
+        bbox_transform=ax.transAxes,
+        borderaxespad=0,
+        borderpad=0,
+        handlelength=legend_handlelength,
+        handletextpad=handletextpad,
+        labelspacing=legend_labelspacing,
+        columnspacing=columnspacing,
+        ncol=ncol,
+        prop=font_props,
         **kwargs,
     )
 

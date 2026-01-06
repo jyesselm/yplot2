@@ -85,6 +85,7 @@ def below(
     width: Optional[float] = None,
     height: Optional[float] = None,
     size: Optional[Tuple[float, float]] = None,
+    left: Optional[float] = None,
 ) -> Coord:
     """
     Create a Coord below the reference.
@@ -95,6 +96,7 @@ def below(
         width: Width of new coord (default: same as ref)
         height: Height of new coord (default: same as ref)
         size: (width, height) tuple, overrides individual width/height
+        left: Left edge of new coord (default: same as ref)
 
     Returns:
         New Coord positioned below ref
@@ -105,9 +107,11 @@ def below(
         width = ref.width
     if height is None:
         height = ref.height
+    if left is None:
+        left = ref.left
 
     return Coord(
-        left=ref.left,
+        left=left,
         bottom=ref.bottom - spacing - height,
         width=width,
         height=height,
@@ -120,6 +124,7 @@ def above(
     width: Optional[float] = None,
     height: Optional[float] = None,
     size: Optional[Tuple[float, float]] = None,
+    left: Optional[float] = None,
 ) -> Coord:
     """
     Create a Coord above the reference.
@@ -130,6 +135,7 @@ def above(
         width: Width of new coord (default: same as ref)
         height: Height of new coord (default: same as ref)
         size: (width, height) tuple, overrides individual width/height
+        left: Left edge of new coord (default: same as ref)
 
     Returns:
         New Coord positioned above ref
@@ -140,9 +146,11 @@ def above(
         width = ref.width
     if height is None:
         height = ref.height
+    if left is None:
+        left = ref.left
 
     return Coord(
-        left=ref.left,
+        left=left,
         bottom=ref.top + spacing,
         width=width,
         height=height,

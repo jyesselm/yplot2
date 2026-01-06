@@ -29,7 +29,7 @@ class Config:
     # Whether to apply font size changes in apply_style
     apply_fontsizes: bool = True
     # Fonts to preserve - don't override these when apply_style is called
-    preserve_font_families: Tuple[str, ...] = ("Arial MS Unicode",)
+    preserve_font_families: Tuple[str, ...] = ("Arial Unicode MS",)
 
     # =========================================================================
     # Axis settings (spines, ticks, labels)
@@ -37,16 +37,26 @@ class Config:
     # Spine (axis lines)
     axis_linewidth: float = 0.75
 
-    # Tick marks
+    # Tick marks (shared settings)
     axis_tick_width: float = 0.75
     axis_tick_length: float = 2.0
-    axis_tick_pad: float = 1.0
-    axis_tick_fontsize: float = 6
     axis_tick_direction: str = "out"  # "in", "out", "inout"
 
-    # Axis labels (xlabel, ylabel)
-    axis_label_fontsize: float = 8
-    axis_label_pad: float = 2.0
+    # X-axis tick settings
+    x_axis_tick_pad: float = 1.0
+    x_axis_tick_fontsize: float = 6
+
+    # Y-axis tick settings
+    y_axis_tick_pad: float = 1.0
+    y_axis_tick_fontsize: float = 6
+
+    # X-axis label settings
+    x_axis_label_fontsize: float = 8
+    x_axis_label_pad: float = 2.0
+
+    # Y-axis label settings
+    y_axis_label_fontsize: float = 8
+    y_axis_label_pad: float = 2.0
 
     # Axis title
     axis_title_fontsize: float = 8
@@ -137,10 +147,14 @@ def print_config() -> None:
     print("Current yplot2 configuration:")
     print("-" * 40)
 
-    # Group by prefix
+    # Group by prefix (handle x_axis and y_axis as part of axis group)
     groups = {}
     for key in list_config_options():
-        prefix = key.split('_')[0]
+        # Map x_axis_* and y_axis_* to 'axis' group
+        if key.startswith('x_axis_') or key.startswith('y_axis_'):
+            prefix = 'axis'
+        else:
+            prefix = key.split('_')[0]
         if prefix not in groups:
             groups[prefix] = []
         groups[prefix].append(key)
@@ -148,7 +162,7 @@ def print_config() -> None:
     for prefix in ['font', 'axis', 'plot', 'legend', 'panel', 'colorbar']:
         if prefix in groups:
             print(f"\n{prefix.upper()}:")
-            for key in groups[prefix]:
+            for key in sorted(groups[prefix]):
                 value = getattr(cfg, key)
                 print(f"  {key}: {value}")
 
@@ -162,8 +176,10 @@ _presets = {
         axis_linewidth=0.75,
         axis_tick_width=0.75,
         axis_tick_length=2.0,
-        axis_tick_fontsize=6,
-        axis_label_fontsize=8,
+        x_axis_tick_fontsize=6,
+        y_axis_tick_fontsize=6,
+        x_axis_label_fontsize=8,
+        y_axis_label_fontsize=8,
         axis_title_fontsize=8,
         plot_linewidth=1.5,
         plot_markersize=4,
@@ -175,8 +191,10 @@ _presets = {
         axis_linewidth=1.5,
         axis_tick_width=1.5,
         axis_tick_length=4.0,
-        axis_tick_fontsize=14,
-        axis_label_fontsize=16,
+        x_axis_tick_fontsize=14,
+        y_axis_tick_fontsize=14,
+        x_axis_label_fontsize=16,
+        y_axis_label_fontsize=16,
         axis_title_fontsize=16,
         plot_linewidth=2.5,
         plot_markersize=8,
@@ -188,8 +206,10 @@ _presets = {
         axis_linewidth=1.0,
         axis_tick_width=1.0,
         axis_tick_length=3.0,
-        axis_tick_fontsize=10,
-        axis_label_fontsize=12,
+        x_axis_tick_fontsize=10,
+        y_axis_tick_fontsize=10,
+        x_axis_label_fontsize=12,
+        y_axis_label_fontsize=12,
         axis_title_fontsize=12,
         plot_linewidth=2.0,
         plot_markersize=6,
@@ -201,8 +221,10 @@ _presets = {
         axis_linewidth=0.5,
         axis_tick_width=0.5,
         axis_tick_length=1.5,
-        axis_tick_fontsize=6,
-        axis_label_fontsize=7,
+        x_axis_tick_fontsize=6,
+        y_axis_tick_fontsize=6,
+        x_axis_label_fontsize=7,
+        y_axis_label_fontsize=7,
         axis_title_fontsize=7,
         plot_linewidth=1.0,
         plot_markersize=3,
@@ -214,8 +236,10 @@ _presets = {
         axis_linewidth=0.5,
         axis_tick_width=0.5,
         axis_tick_length=2.0,
-        axis_tick_fontsize=5,
-        axis_label_fontsize=6,
+        x_axis_tick_fontsize=5,
+        y_axis_tick_fontsize=5,
+        x_axis_label_fontsize=6,
+        y_axis_label_fontsize=6,
         axis_title_fontsize=6,
         plot_linewidth=1.0,
         plot_markersize=3,
@@ -229,8 +253,10 @@ _presets = {
         axis_linewidth=0.5,
         axis_tick_width=0.5,
         axis_tick_length=2.0,
-        axis_tick_fontsize=6,
-        axis_label_fontsize=7,
+        x_axis_tick_fontsize=6,
+        y_axis_tick_fontsize=6,
+        x_axis_label_fontsize=7,
+        y_axis_label_fontsize=7,
         axis_title_fontsize=7,
         plot_linewidth=1.0,
         plot_markersize=3,
@@ -243,8 +269,10 @@ _presets = {
         axis_linewidth=0.35,
         axis_tick_width=0.35,
         axis_tick_length=1.5,
-        axis_tick_fontsize=5,
-        axis_label_fontsize=6,
+        x_axis_tick_fontsize=5,
+        y_axis_tick_fontsize=5,
+        x_axis_label_fontsize=6,
+        y_axis_label_fontsize=6,
         axis_title_fontsize=6,
         plot_linewidth=0.75,
         plot_markersize=2.5,
@@ -257,8 +285,10 @@ _presets = {
         axis_linewidth=0.5,
         axis_tick_width=0.5,
         axis_tick_length=2.0,
-        axis_tick_fontsize=6,
-        axis_label_fontsize=8,
+        x_axis_tick_fontsize=6,
+        y_axis_tick_fontsize=6,
+        x_axis_label_fontsize=8,
+        y_axis_label_fontsize=8,
         axis_title_fontsize=8,
         plot_linewidth=1.0,
         plot_markersize=3,

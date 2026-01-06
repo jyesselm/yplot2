@@ -111,6 +111,7 @@ from .style import (
     publication_style,  # alias for apply_style
     remove_spines,
     add_legend,
+    add_legend_above,
     set_xlabel,
     set_ylabel,
     set_title,
@@ -214,6 +215,7 @@ __all__ = [
     "publication_style",
     "remove_spines",
     "add_legend",
+    "add_legend_above",
     "set_xlabel",
     "set_ylabel",
     "set_title",
