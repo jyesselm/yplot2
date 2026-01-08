@@ -103,6 +103,49 @@ def create_figure(
     return fig, axes
 
 
+def subplots(
+    width: float = 2.0,
+    height: float = 2.0,
+    left: float = 0.5,
+    bottom: float = 0.4,
+    dpi: int = 100,
+) -> Tuple[Figure, Axes]:
+    """
+    Create a figure with a single subplot of the specified true size.
+
+    This is a convenience function for creating quick single-panel figures
+    where the plot area has an exact size in inches.
+
+    Args:
+        width: Width of the plot area in inches (default: 2.0)
+        height: Height of the plot area in inches (default: 2.0)
+        left: Left margin in inches (default: 0.5)
+        bottom: Bottom margin in inches (default: 0.4)
+        dpi: Figure resolution (default: 100)
+
+    Returns:
+        Tuple of (Figure, Axes)
+
+    Example:
+        # 2x2 inch plot
+        fig, ax = yp.subplots(2, 2)
+        ax.plot([1, 2, 3], [1, 4, 9])
+
+        # 3x2 inch plot with custom margins
+        fig, ax = yp.subplots(3, 2, left=0.6, bottom=0.5)
+    """
+    # Calculate figure size to accommodate plot area + margins
+    right_margin = 0.1  # Small right margin
+    top_margin = 0.1    # Small top margin
+    fig_width = left + width + right_margin
+    fig_height = bottom + height + top_margin
+
+    coord = Coord(left=left, bottom=bottom, width=width, height=height)
+    fig, axes = create_figure((fig_width, fig_height), [coord], dpi=dpi)
+
+    return fig, axes[0]
+
+
 def load_image(
     ax: Axes,
     image_path: str,

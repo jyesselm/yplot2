@@ -76,6 +76,7 @@ from .spacing import (
 # Figure creation and utilities
 from .figure import (
     create_figure,
+    subplots,
     get_image_size,
     coord_from_image,
     load_image,
@@ -188,6 +189,7 @@ __all__ = [
     "suggest_figure_size",
     # Figure
     "create_figure",
+    "subplots",
     "get_image_size",
     "coord_from_image",
     "load_image",
