@@ -103,6 +103,35 @@ def create_figure(
     return fig, axes
 
 
+def subplot_true_size(
+    width: float = 2.0,
+    height: float = 2.0,
+    dpi: int = 100,
+) -> Tuple[Figure, Axes]:
+    """
+    Create a figure where the axes exactly matches the specified dimensions.
+
+    Removes all margins and padding so the axes panel size equals
+    the specified width and height in inches. Useful for testing or
+    when you need precise control over the output size.
+
+    Args:
+        width: Desired axes width in inches (default: 2.0)
+        height: Desired axes height in inches (default: 2.0)
+        dpi: Figure DPI (default: 100)
+
+    Returns:
+        Tuple of (Figure, Axes)
+
+    Example:
+        # Creates axes exactly 2x2 inches with no margins
+        fig, ax = yp.subplot_true_size(2, 2)
+    """
+    fig, ax = plt.subplots(figsize=(width, height), dpi=dpi)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    return fig, ax
+
+
 def subplots(
     subplotsize: Tuple[float, float] = (2.0, 2.0),
     margins: Tuple[float, float, float, float] = (0.5, 0.4, 0.1, 0.1),
