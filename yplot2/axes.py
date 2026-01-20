@@ -139,6 +139,64 @@ def share_y(
         )
 
 
+def match_ticks(
+    ax: Axes,
+    source: str = "y",
+    target: str = "x",
+    match_limits: bool = True,
+) -> Axes:
+    """
+    Copy tick positions and optionally limits from one axis to another.
+
+    Useful for making square plots or ensuring consistent tick spacing
+    between x and y axes.
+
+    Args:
+        ax: The matplotlib Axes object to modify.
+        source: Axis to copy from ("x" or "y"). Default "y".
+        target: Axis to apply to ("x" or "y"). Default "x".
+        match_limits: If True, also copy axis limits. Default True.
+
+    Returns:
+        The modified matplotlib Axes object.
+
+    Raises:
+        ValueError: If source or target is not "x" or "y".
+
+    Example:
+        >>> # Copy y-axis ticks and limits to x-axis
+        >>> match_ticks(ax, source="y", target="x")
+        >>> # Copy only ticks, not limits
+        >>> match_ticks(ax, source="y", target="x", match_limits=False)
+    """
+    if source not in ("x", "y"):
+        raise ValueError(f"source must be 'x' or 'y', got '{source}'")
+    if target not in ("x", "y"):
+        raise ValueError(f"target must be 'x' or 'y', got '{target}'")
+    if source == target:
+        raise ValueError("source and target must be different")
+
+    # Get ticks and limits from source axis
+    if source == "x":
+        ticks = ax.get_xticks()
+        limits = ax.get_xlim()
+    else:
+        ticks = ax.get_yticks()
+        limits = ax.get_ylim()
+
+    # Apply to target axis (set ticks first, then limits to override auto-adjust)
+    if target == "x":
+        ax.set_xticks(ticks)
+        if match_limits:
+            ax.set_xlim(limits)
+    else:
+        ax.set_yticks(ticks)
+        if match_limits:
+            ax.set_ylim(limits)
+
+    return ax
+
+
 def sync_limits(
     axes_list: List[Axes],
     axis: str = "both",

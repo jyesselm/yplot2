@@ -92,6 +92,7 @@ from .figure import (
 from .axes import (
     share_x,
     share_y,
+    match_ticks,
     sync_limits,
     add_shared_xlabel,
     add_shared_ylabel,
@@ -139,6 +140,8 @@ from .plots import (
     text,
     # Specialized plots
     lollipop,
+    regplot,
+    regplot_density,
     pop_avg,
     pop_avg_from_row,
     pop_avg_diff,
@@ -203,6 +206,7 @@ __all__ = [
     # Axes grouping
     "share_x",
     "share_y",
+    "match_ticks",
     "sync_limits",
     "add_shared_xlabel",
     "add_shared_ylabel",
@@ -243,6 +247,8 @@ __all__ = [
     "text",
     # Specialized plots
     "lollipop",
+    "regplot",
+    "regplot_density",
     "pop_avg",
     "pop_avg_from_row",
     "pop_avg_diff",

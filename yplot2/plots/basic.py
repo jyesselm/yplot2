@@ -11,6 +11,15 @@ from matplotlib.transforms import ScaledTranslation
 from ..config import get_config
 
 
+def _merge_args(defaults: dict, user_args: Optional[dict]) -> dict:
+    """Merge user args into defaults, user values take precedence."""
+    if user_args is None:
+        return defaults.copy()
+    result = defaults.copy()
+    result.update(user_args)
+    return result
+
+
 # Position definitions: (x, y, x_offset_pts, y_offset_pts, va, ha)
 # x, y are anchor points in axes coordinates (0-1)
 # x_offset_pts, y_offset_pts are offsets in points (1 point = 1/72 inch)
@@ -428,10 +437,7 @@ def text(
     fontsize: Optional[float] = None,
     offset: Optional[float] = None,
     box: bool = False,
-    box_facecolor: str = "white",
-    box_edgecolor: str = "black",
-    box_alpha: float = 0.9,
-    box_style: str = "round,pad=0.3",
+    box_args: Optional[dict] = None,
     **kwargs,
 ) -> plt.Text:
     """
@@ -449,10 +455,9 @@ def text(
         offset: Offset from edge in points (1 point = 1/72 inch).
             Overrides default offset. Default is 4 points.
         box: If True, draw a box around the text.
-        box_facecolor: Background color for box.
-        box_edgecolor: Edge color for box.
-        box_alpha: Transparency for box.
-        box_style: Style of box ('round,pad=0.3', 'square', etc.).
+        box_args: Dict of box styling options. Keys: facecolor, edgecolor,
+            alpha, style. Defaults: facecolor='white', edgecolor='black',
+            alpha=0.9, style='round,pad=0.3'.
         **kwargs: Additional arguments passed to ax.text (color, fontweight, etc.).
 
     Returns:
@@ -469,8 +474,8 @@ def text(
         >>> text(ax, "p < 0.05", pos="tr", fontsize=8)
         >>> text(ax, "R² = 0.95", pos="bottom right", fontweight="bold")
         >>> text(ax, "Important", pos="center", box=True)
+        >>> text(ax, "Styled box", box=True, box_args={"facecolor": "yellow"})
         >>> text(ax, "Custom", pos=(0.5, 0.8))
-        >>> text(ax, "More offset", pos="top left", offset=10)
     """
     cfg = get_config()
     fontsize = fontsize if fontsize is not None else cfg.text_fontsize
@@ -517,11 +522,17 @@ def text(
 
     # Add box if requested
     if box:
+        _box_args = _merge_args({
+            "facecolor": "white",
+            "edgecolor": "black",
+            "alpha": 0.9,
+            "style": "round,pad=0.3",
+        }, box_args)
         text_kwargs["bbox"] = dict(
-            boxstyle=box_style,
-            facecolor=box_facecolor,
-            edgecolor=box_edgecolor,
-            alpha=box_alpha,
+            boxstyle=_box_args["style"],
+            facecolor=_box_args["facecolor"],
+            edgecolor=_box_args["edgecolor"],
+            alpha=_box_args["alpha"],
         )
 
     return ax.text(x, y, text, **text_kwargs)

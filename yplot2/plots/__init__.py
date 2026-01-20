@@ -21,6 +21,7 @@ from .basic import (
 
 # Specialized plot types
 from .lollipop import lollipop
+from .regression import regplot, regplot_density
 from .pop_avg import (
     pop_avg,
     pop_avg_from_row,
@@ -47,6 +48,8 @@ __all__ = [
     "text",
     # Specialized plots
     "lollipop",
+    "regplot",
+    "regplot_density",
     "pop_avg",
     "pop_avg_from_row",
     "pop_avg_diff",

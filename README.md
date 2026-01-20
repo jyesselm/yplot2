@@ -291,6 +291,10 @@ yp.text(ax, "R² = 0.95", pos="bottom right", fontweight="bold")
 # Text with box
 yp.text(ax, "Important", pos="center", box=True)
 
+# Styled box using box_args
+yp.text(ax, "Styled", pos="center", box=True,
+        box_args={"facecolor": "yellow", "edgecolor": "red", "alpha": 0.8})
+
 # Custom position (x, y in axes coordinates 0-1)
 yp.text(ax, "Custom", pos=(0.5, 0.8))
 
@@ -300,6 +304,29 @@ yp.text(ax, "Custom", pos=(0.5, 0.8))
 # Center: 'center'
 # Outside: 'above', 'below'
 ```
+
+## Argument Grouping Pattern
+
+Composite plot functions use `*_args` dicts to group related styling options. This keeps function signatures clean while allowing full customization:
+
+```python
+# Instead of many individual parameters:
+# regplot(ax, x, y, line_color="red", line_linewidth=2, line_linestyle="--", ...)
+
+# Use grouped *_args dicts:
+yp.regplot(ax, x, y,
+           line_args={"color": "red", "linewidth": 2, "linestyle": "--"},
+           scatter_args={"c": "blue", "s": 100, "alpha": 0.5},
+           r2_args={"pos": "top right", "precision": 2})
+```
+
+Common `*_args` patterns:
+- `line_args` - color, linewidth, linestyle (passed to `line()`)
+- `scatter_args` - c, s, marker, alpha, edgecolors (passed to `scatter()`)
+- `marker_args` - same as scatter_args
+- `r2_args` - pos, prefix, precision, fontsize, box
+- `cbar_args` - label, width, pad (colorbar options, width/pad in inches)
+- `box_args` - facecolor, edgecolor, alpha, style
 
 ## Specialized Plots
 
@@ -333,7 +360,55 @@ x = [1, 2, 3, 4]
 y1 = [0.1, 0.2, 0.3, 0.4]
 y2 = [0.15, 0.25, 0.35, 0.45]
 
+# Basic usage
 yp.lollipop(ax, x, y1, y2)
+
+# Custom styling with *_args
+yp.lollipop(ax, x, y1, y2,
+            line_args={"color": "red", "linewidth": 2},
+            marker_args={"c": "blue", "s": 100})
+```
+
+### Regression Plots
+
+Scatter plot with regression line and R² annotation:
+
+```python
+# Basic usage - dashed black fit line, R² shown in top-left by default
+result = yp.regplot(ax, x, y)
+print(f"Slope: {result['slope']}, R²: {result['r_squared']}")
+
+# Custom styling
+yp.regplot(ax, x, y,
+           line_args={"color": "red", "linestyle": "-"},
+           scatter_args={"c": "blue", "alpha": 0.5},
+           r2_args={"pos": "top right", "precision": 2, "box": True})
+
+# Hide scatter or R² text
+yp.regplot(ax, x, y, show_scatter=False)
+yp.regplot(ax, x, y, show_r2=False)
+```
+
+### Density Regression Plots
+
+For large datasets, use `regplot_density` to show point density with color.
+Each point is colored by local density (computed via 2D histogram), with
+high-density points drawn on top:
+
+```python
+# Basic usage - density-colored scatter with colorbar
+result = yp.regplot_density(ax, x, y)
+
+# Custom styling
+yp.regplot_density(ax, x, y,
+                   bins=200,
+                   scatter_args={"cmap": "viridis", "s": 5, "cmap_min": 0.3},
+                   line_args={"color": "red"},
+                   cbar_args={"label": "Points"})
+
+# Hide colorbar or R²
+yp.regplot_density(ax, x, y, show_cbar=False)
+yp.regplot_density(ax, x, y, show_r2=False)
 ```
 
 ## Styling
@@ -358,6 +433,20 @@ yp.set_background_all(axes, "lightyellow")
 # Draw border around entire figure
 yp.draw_figure_border(fig)
 yp.draw_figure_border(fig, linewidth=2, color="gray")
+```
+
+## Axis Utilities
+
+### Match Ticks Between Axes
+
+Copy tick positions and limits from one axis to another (useful for square plots):
+
+```python
+# Copy y-axis ticks and limits to x-axis (default)
+yp.match_ticks(ax, source="y", target="x")
+
+# Copy only ticks, keep original limits
+yp.match_ticks(ax, source="y", target="x", match_limits=False)
 ```
 
 ## Shared Axes
@@ -602,10 +691,12 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `boxplot(ax, x, ...)` - Box plot
 - `hline(ax, y, ...)` - Horizontal line
 - `vline(ax, x, ...)` - Vertical line
-- `text(ax, text, pos, ...)` - Text at named position ('top left', 'center', etc.)
+- `text(ax, text, pos, box, box_args, ...)` - Text at named position ('top left', 'center', etc.)
 
 ### Plotting (Specialized)
-- `lollipop(ax, x, y1, y2, ...)` - Paired lollipop plot
+- `regplot(ax, x, y, line_args, scatter_args, r2_args, ...)` - Regression plot with R² annotation
+- `regplot_density(ax, x, y, bins, scatter_args, line_args, r2_args, cbar_args, ...)` - Density-colored scatter with colorbar
+- `lollipop(ax, x, y1, y2, line_args, marker_args)` - Paired lollipop plot
 - `pop_avg(ax, sequence, structure, reactivities, ...)` - RNA reactivity bar plot
 - `pop_avg_from_row(ax, row, ...)` - Plot from DataFrame row
 - `pop_avg_diff(row1, row2, ...)` - Difference plot
@@ -620,6 +711,9 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `add_legend(ax, labels, ...)` - Add styled legend
 - `set_background(ax, color)` - Set axes background color
 - `set_background_all(axes, color)` - Set background for all axes
+
+### Axis Utilities
+- `match_ticks(ax, source, target)` - Copy tick positions from one axis to another
 
 ### Shared Axes
 - `share_x(axes_list)` - Share x-axis (hide labels)
