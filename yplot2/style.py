@@ -653,6 +653,44 @@ def set_title(
     ax.set_title(title, fontsize=fontsize, fontname=fontname, **kwargs)
 
 
+def strip_labels(
+    ax: Axes,
+) -> None:
+    """
+    Remove axis labels, tick labels, and x tick lines from an axes.
+
+    Keeps tick positions and spines intact, unlike clear_axes which
+    removes ticks entirely.
+
+    Args:
+        ax: Axes object
+
+    Example:
+        yp.strip_labels(ax)
+    """
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.tick_params(axis="x", length=0)
+
+
+def strip_labels_all(
+    axes: List[Axes],
+) -> None:
+    """
+    Remove axis labels, tick labels, and x tick lines from multiple axes.
+
+    Args:
+        axes: List of Axes objects
+
+    Example:
+        yp.strip_labels_all(axes)
+    """
+    for ax in axes:
+        strip_labels(ax)
+
+
 def set_background(
     ax: Axes,
     color: str = "lightgray",
