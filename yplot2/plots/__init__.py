@@ -28,6 +28,7 @@ from .pop_avg import (
     pop_avg_diff,
     pop_avg_all,
     pop_avg_traces,
+    stacked_pop_avg,
 )
 
 # Color utilities
@@ -55,6 +56,7 @@ __all__ = [
     "pop_avg_diff",
     "pop_avg_all",
     "pop_avg_traces",
+    "stacked_pop_avg",
     # Colors
     "colors_for_sequence",
     "NUCLEOTIDE_COLORS",
