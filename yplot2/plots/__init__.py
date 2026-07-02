@@ -32,7 +32,14 @@ from .pop_avg import (
 )
 
 # Color utilities
-from .colors import colors_for_sequence, NUCLEOTIDE_COLORS
+from .colors import (
+    colors_for_sequence,
+    NUCLEOTIDE_COLORS,
+    palette,
+    palette_hex,
+    house_palette_colors,
+    hue_order,
+)
 
 __all__ = [
     # Basic plots
@@ -60,4 +67,8 @@ __all__ = [
     # Colors
     "colors_for_sequence",
     "NUCLEOTIDE_COLORS",
+    "palette",
+    "palette_hex",
+    "house_palette_colors",
+    "hue_order",
 ]

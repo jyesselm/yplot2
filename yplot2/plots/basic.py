@@ -9,6 +9,7 @@ from matplotlib.axes import Axes
 from matplotlib.transforms import ScaledTranslation
 
 from ..config import get_config
+from ..style import _resolve_font_family
 
 
 def _merge_args(defaults: dict, user_args: Optional[dict]) -> dict:
@@ -103,12 +104,20 @@ def scatter(
     cfg = get_config()
 
     if s is None:
-        s = cfg.plot_markersize ** 2  # scatter uses area
+        s = cfg.plot_markersize**2  # scatter uses area
     if linewidths is None:
         linewidths = cfg.axis_linewidth * 0.5
 
-    return ax.scatter(x, y, s=s, c=c, marker=marker,
-                      edgecolors=edgecolors, linewidths=linewidths, **kwargs)
+    return ax.scatter(
+        x,
+        y,
+        s=s,
+        c=c,
+        marker=marker,
+        edgecolors=edgecolors,
+        linewidths=linewidths,
+        **kwargs,
+    )
 
 
 def line(
@@ -171,8 +180,9 @@ def bar(
     if linewidth is None:
         linewidth = cfg.axis_linewidth
 
-    return ax.bar(x, height, width=width, edgecolor=edgecolor,
-                  linewidth=linewidth, **kwargs)
+    return ax.bar(
+        x, height, width=width, edgecolor=edgecolor, linewidth=linewidth, **kwargs
+    )
 
 
 def barh(
@@ -204,8 +214,9 @@ def barh(
     if linewidth is None:
         linewidth = cfg.axis_linewidth
 
-    return ax.barh(y, width, height=height, edgecolor=edgecolor,
-                   linewidth=linewidth, **kwargs)
+    return ax.barh(
+        y, width, height=height, edgecolor=edgecolor, linewidth=linewidth, **kwargs
+    )
 
 
 def errorbar(
@@ -214,7 +225,7 @@ def errorbar(
     y,
     yerr=None,
     xerr=None,
-    fmt: str = 'o',
+    fmt: str = "o",
     linewidth: Optional[float] = None,
     markersize: Optional[float] = None,
     capsize: Optional[float] = None,
@@ -254,10 +265,19 @@ def errorbar(
     if elinewidth is None:
         elinewidth = cfg.axis_linewidth
 
-    return ax.errorbar(x, y, yerr=yerr, xerr=xerr, fmt=fmt,
-                       linewidth=linewidth, markersize=markersize,
-                       capsize=capsize, capthick=capthick,
-                       elinewidth=elinewidth, **kwargs)
+    return ax.errorbar(
+        x,
+        y,
+        yerr=yerr,
+        xerr=xerr,
+        fmt=fmt,
+        linewidth=linewidth,
+        markersize=markersize,
+        capsize=capsize,
+        capthick=capthick,
+        elinewidth=elinewidth,
+        **kwargs,
+    )
 
 
 def fill_between(
@@ -293,8 +313,8 @@ def fill_between(
 def hist(
     ax: Axes,
     x,
-    bins: Union[int, str, List] = 'auto',
-    edgecolor: Optional[str] = 'white',
+    bins: Union[int, str, List] = "auto",
+    edgecolor: Optional[str] = "white",
     linewidth: Optional[float] = None,
     **kwargs,
 ):
@@ -348,32 +368,38 @@ def boxplot(
         fliersize = cfg.plot_markersize
 
     # Set box properties
-    boxprops = kwargs.pop('boxprops', {})
-    boxprops.setdefault('linewidth', linewidth)
+    boxprops = kwargs.pop("boxprops", {})
+    boxprops.setdefault("linewidth", linewidth)
 
-    whiskerprops = kwargs.pop('whiskerprops', {})
-    whiskerprops.setdefault('linewidth', linewidth)
+    whiskerprops = kwargs.pop("whiskerprops", {})
+    whiskerprops.setdefault("linewidth", linewidth)
 
-    capprops = kwargs.pop('capprops', {})
-    capprops.setdefault('linewidth', linewidth)
+    capprops = kwargs.pop("capprops", {})
+    capprops.setdefault("linewidth", linewidth)
 
-    medianprops = kwargs.pop('medianprops', {})
-    medianprops.setdefault('linewidth', linewidth)
+    medianprops = kwargs.pop("medianprops", {})
+    medianprops.setdefault("linewidth", linewidth)
 
-    flierprops = kwargs.pop('flierprops', {})
-    flierprops.setdefault('markersize', fliersize)
+    flierprops = kwargs.pop("flierprops", {})
+    flierprops.setdefault("markersize", fliersize)
 
-    return ax.boxplot(x, boxprops=boxprops, whiskerprops=whiskerprops,
-                      capprops=capprops, medianprops=medianprops,
-                      flierprops=flierprops, **kwargs)
+    return ax.boxplot(
+        x,
+        boxprops=boxprops,
+        whiskerprops=whiskerprops,
+        capprops=capprops,
+        medianprops=medianprops,
+        flierprops=flierprops,
+        **kwargs,
+    )
 
 
 def hline(
     ax: Axes,
     y: float,
     linewidth: Optional[float] = None,
-    linestyle: str = '--',
-    color: str = 'gray',
+    linestyle: str = "--",
+    color: str = "gray",
     **kwargs,
 ):
     """
@@ -395,16 +421,17 @@ def hline(
     if linewidth is None:
         linewidth = cfg.plot_linewidth
 
-    return ax.axhline(y, linewidth=linewidth, linestyle=linestyle,
-                      color=color, **kwargs)
+    return ax.axhline(
+        y, linewidth=linewidth, linestyle=linestyle, color=color, **kwargs
+    )
 
 
 def vline(
     ax: Axes,
     x: float,
     linewidth: Optional[float] = None,
-    linestyle: str = '--',
-    color: str = 'gray',
+    linestyle: str = "--",
+    color: str = "gray",
     **kwargs,
 ):
     """
@@ -426,8 +453,9 @@ def vline(
     if linewidth is None:
         linewidth = cfg.plot_linewidth
 
-    return ax.axvline(x, linewidth=linewidth, linestyle=linestyle,
-                      color=color, **kwargs)
+    return ax.axvline(
+        x, linewidth=linewidth, linestyle=linestyle, color=color, **kwargs
+    )
 
 
 def text(
@@ -479,7 +507,12 @@ def text(
     """
     cfg = get_config()
     fontsize = fontsize if fontsize is not None else cfg.text_fontsize
-    fontfamily = kwargs.pop("fontfamily", None) or kwargs.pop("fontname", None) or cfg.font_family
+    _raw_family = (
+        kwargs.pop("fontfamily", None)
+        or kwargs.pop("fontname", None)
+        or cfg.font_family
+    )
+    fontfamily = _resolve_font_family(_raw_family)
     fig = ax.get_figure()
 
     # Resolve position
@@ -488,9 +521,7 @@ def text(
         pos_name = TEXT_POSITION_ALIASES.get(pos, pos)
         if pos_name not in TEXT_POSITIONS:
             valid = list(TEXT_POSITIONS.keys()) + list(TEXT_POSITION_ALIASES.keys())
-            raise ValueError(
-                f"Unknown position '{pos}'. Valid positions: {valid}"
-            )
+            raise ValueError(f"Unknown position '{pos}'. Valid positions: {valid}")
         x, y, x_off, y_off, va, ha = TEXT_POSITIONS[pos_name]
 
         # Apply custom offset if specified
@@ -522,12 +553,15 @@ def text(
 
     # Add box if requested
     if box:
-        _box_args = _merge_args({
-            "facecolor": "white",
-            "edgecolor": "black",
-            "alpha": 0.9,
-            "style": "round,pad=0.3",
-        }, box_args)
+        _box_args = _merge_args(
+            {
+                "facecolor": "white",
+                "edgecolor": "black",
+                "alpha": 0.9,
+                "style": "round,pad=0.3",
+            },
+            box_args,
+        )
         text_kwargs["bbox"] = dict(
             boxstyle=_box_args["style"],
             facecolor=_box_args["facecolor"],

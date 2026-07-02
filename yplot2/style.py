@@ -5,12 +5,12 @@ All functions use global config defaults when parameters aren't specified.
 Any parameter can be overridden per-panel.
 """
 
-from typing import Optional, List, Tuple, Union
+from contextlib import contextmanager
+from typing import Generator, Optional, List, Tuple, Union
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.font_manager as fm
 from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 
 from .config import get_config
 
@@ -21,33 +21,57 @@ def _should_preserve_font(current_font: str, preserve_list: Tuple[str, ...]) -> 
         return False
     # Case-insensitive comparison
     current_lower = current_font.lower()
-    return any(font.lower() in current_lower or current_lower in font.lower()
-               for font in preserve_list)
+    return any(
+        font.lower() in current_lower or current_lower in font.lower()
+        for font in preserve_list
+    )
+
+
+def _is_arial(name: str) -> bool:
+    """Return True only for the bare "Arial" family (not Arial Narrow/Black/etc.)."""
+    return name.strip().lower() == "arial"
 
 
 def _resolve_font_family(font_family: Union[str, Tuple[str, ...]]) -> str:
     """
-    Resolve a font family, supporting fallback chains.
+    Resolve a font family, supporting fallback chains and Arial→Arimo mapping.
+
+    When the requested font is exactly "Arial" (case-insensitive, not Arial
+    Narrow or Arial Black) and Arial is absent from the host system, this
+    returns "Arimo" if the bundled Arimo is registered — providing a
+    deterministic metric-compatible substitute.  "Arial Narrow" and similar
+    variants are passed through unchanged (they are distinct faces with
+    different metrics).
 
     Args:
-        font_family: Single font name or tuple of fonts to try in order
+        font_family: Single font name, or tuple of fonts to try in order.
+            None or non-str/tuple inputs fall back to "Arimo".
 
     Returns:
-        The first available font from the chain, or the first font if none found
+        The resolved font name (str).
     """
-    if isinstance(font_family, str):
-        return font_family
+    if font_family is None or not isinstance(font_family, (str, tuple)):
+        return "Arimo"
 
-    # Get list of available fonts
     available_fonts = set(f.name for f in fm.fontManager.ttflist)
 
-    # Try each font in the chain
+    if isinstance(font_family, str):
+        if font_family in available_fonts:
+            return font_family
+        # Exact "Arial" → Arimo when Arial absent; Arial Narrow/Black pass through
+        if _is_arial(font_family) and "Arimo" in available_fonts:
+            return "Arimo"
+        return font_family
+
+    # Tuple: try each font in order (apply Arial→Arimo in each slot)
     for font in font_family:
         if font in available_fonts:
             return font
+        if _is_arial(font) and "Arimo" in available_fonts:
+            return "Arimo"
 
     # Return first font as fallback (matplotlib will handle missing fonts)
-    return font_family[0] if font_family else "Arial"
+    return font_family[0] if font_family else "Arimo"
 
 
 def apply_style(
@@ -127,33 +151,79 @@ def apply_style(
     cfg = get_config()
 
     # Get values from config if not specified
-    axis_linewidth = axis_linewidth if axis_linewidth is not None else cfg.axis_linewidth
-    axis_tick_width = axis_tick_width if axis_tick_width is not None else cfg.axis_tick_width
-    axis_tick_length = axis_tick_length if axis_tick_length is not None else cfg.axis_tick_length
-    axis_tick_direction = axis_tick_direction if axis_tick_direction is not None else cfg.axis_tick_direction
+    axis_linewidth = (
+        axis_linewidth if axis_linewidth is not None else cfg.axis_linewidth
+    )
+    axis_tick_width = (
+        axis_tick_width if axis_tick_width is not None else cfg.axis_tick_width
+    )
+    axis_tick_length = (
+        axis_tick_length if axis_tick_length is not None else cfg.axis_tick_length
+    )
+    axis_tick_direction = (
+        axis_tick_direction
+        if axis_tick_direction is not None
+        else cfg.axis_tick_direction
+    )
 
     # X-axis settings
-    x_axis_tick_pad = x_axis_tick_pad if x_axis_tick_pad is not None else cfg.x_axis_tick_pad
-    x_axis_tick_fontsize = x_axis_tick_fontsize if x_axis_tick_fontsize is not None else cfg.x_axis_tick_fontsize
-    x_axis_label_fontsize = x_axis_label_fontsize if x_axis_label_fontsize is not None else cfg.x_axis_label_fontsize
-    x_axis_label_pad = x_axis_label_pad if x_axis_label_pad is not None else cfg.x_axis_label_pad
+    x_axis_tick_pad = (
+        x_axis_tick_pad if x_axis_tick_pad is not None else cfg.x_axis_tick_pad
+    )
+    x_axis_tick_fontsize = (
+        x_axis_tick_fontsize
+        if x_axis_tick_fontsize is not None
+        else cfg.x_axis_tick_fontsize
+    )
+    x_axis_label_fontsize = (
+        x_axis_label_fontsize
+        if x_axis_label_fontsize is not None
+        else cfg.x_axis_label_fontsize
+    )
+    x_axis_label_pad = (
+        x_axis_label_pad if x_axis_label_pad is not None else cfg.x_axis_label_pad
+    )
 
     # Y-axis settings
-    y_axis_tick_pad = y_axis_tick_pad if y_axis_tick_pad is not None else cfg.y_axis_tick_pad
-    y_axis_tick_fontsize = y_axis_tick_fontsize if y_axis_tick_fontsize is not None else cfg.y_axis_tick_fontsize
-    y_axis_label_fontsize = y_axis_label_fontsize if y_axis_label_fontsize is not None else cfg.y_axis_label_fontsize
-    y_axis_label_pad = y_axis_label_pad if y_axis_label_pad is not None else cfg.y_axis_label_pad
+    y_axis_tick_pad = (
+        y_axis_tick_pad if y_axis_tick_pad is not None else cfg.y_axis_tick_pad
+    )
+    y_axis_tick_fontsize = (
+        y_axis_tick_fontsize
+        if y_axis_tick_fontsize is not None
+        else cfg.y_axis_tick_fontsize
+    )
+    y_axis_label_fontsize = (
+        y_axis_label_fontsize
+        if y_axis_label_fontsize is not None
+        else cfg.y_axis_label_fontsize
+    )
+    y_axis_label_pad = (
+        y_axis_label_pad if y_axis_label_pad is not None else cfg.y_axis_label_pad
+    )
 
     # Title settings
-    axis_title_fontsize = axis_title_fontsize if axis_title_fontsize is not None else cfg.axis_title_fontsize
-    axis_title_pad = axis_title_pad if axis_title_pad is not None else cfg.axis_title_pad
+    axis_title_fontsize = (
+        axis_title_fontsize
+        if axis_title_fontsize is not None
+        else cfg.axis_title_fontsize
+    )
+    axis_title_pad = (
+        axis_title_pad if axis_title_pad is not None else cfg.axis_title_pad
+    )
 
     # Font settings
     font_family_raw = font_family if font_family is not None else cfg.font_family
     font_family = _resolve_font_family(font_family_raw)
     apply_fonts = apply_fonts if apply_fonts is not None else cfg.apply_fonts
-    preserve_fonts = preserve_font_families if preserve_font_families is not None else cfg.preserve_font_families
-    apply_fontsizes = apply_fontsizes if apply_fontsizes is not None else cfg.apply_fontsizes
+    preserve_fonts = (
+        preserve_font_families
+        if preserve_font_families is not None
+        else cfg.preserve_font_families
+    )
+    apply_fontsizes = (
+        apply_fontsizes if apply_fontsizes is not None else cfg.apply_fontsizes
+    )
 
     # Set spine line widths
     for spine in ax.spines.values():
@@ -161,14 +231,14 @@ def apply_style(
 
     # Set tick parameters separately for x and y
     ax.tick_params(
-        axis='x',
+        axis="x",
         width=axis_tick_width,
         length=axis_tick_length,
         pad=x_axis_tick_pad,
         direction=axis_tick_direction,
     )
     ax.tick_params(
-        axis='y',
+        axis="y",
         width=axis_tick_width,
         length=axis_tick_length,
         pad=y_axis_tick_pad,
@@ -190,18 +260,24 @@ def apply_style(
     # Set title properties
     if apply_fontsizes:
         ax.title.set_fontsize(axis_title_fontsize)
-    if apply_fonts and not _should_preserve_font(ax.title.get_fontname(), preserve_fonts):
+    if apply_fonts and not _should_preserve_font(
+        ax.title.get_fontname(), preserve_fonts
+    ):
         ax.title.set_fontname(font_family)
 
     # Set tick label fonts
     for label in ax.get_xticklabels():
-        if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
+        if apply_fonts and not _should_preserve_font(
+            label.get_fontname(), preserve_fonts
+        ):
             label.set_fontname(font_family)
         if apply_fontsizes:
             label.set_fontsize(x_axis_tick_fontsize)
 
     for label in ax.get_yticklabels():
-        if apply_fonts and not _should_preserve_font(label.get_fontname(), preserve_fonts):
+        if apply_fonts and not _should_preserve_font(
+            label.get_fontname(), preserve_fonts
+        ):
             label.set_fontname(font_family)
         if apply_fontsizes:
             label.set_fontsize(y_axis_tick_fontsize)
@@ -278,16 +354,16 @@ def clear_axes(
         ax.set_xticklabels([])
         ax.set_xlabel("")
         if spines:
-            ax.spines['top'].set_visible(False)
-            ax.spines['bottom'].set_visible(False)
+            ax.spines["top"].set_visible(False)
+            ax.spines["bottom"].set_visible(False)
 
     if y:
         ax.set_yticks([])
         ax.set_yticklabels([])
         ax.set_ylabel("")
         if spines:
-            ax.spines['left'].set_visible(False)
-            ax.spines['right'].set_visible(False)
+            ax.spines["left"].set_visible(False)
+            ax.spines["right"].set_visible(False)
 
 
 def clear_axes_all(
@@ -348,10 +424,22 @@ def add_legend(
     """
     cfg = get_config()
 
-    legend_fontsize = legend_fontsize if legend_fontsize is not None else cfg.legend_fontsize
-    legend_frameon = legend_frameon if legend_frameon is not None else cfg.legend_frameon
-    legend_handlelength = legend_handlelength if legend_handlelength is not None else cfg.legend_handlelength
-    legend_labelspacing = legend_labelspacing if legend_labelspacing is not None else cfg.legend_labelspacing
+    legend_fontsize = (
+        legend_fontsize if legend_fontsize is not None else cfg.legend_fontsize
+    )
+    legend_frameon = (
+        legend_frameon if legend_frameon is not None else cfg.legend_frameon
+    )
+    legend_handlelength = (
+        legend_handlelength
+        if legend_handlelength is not None
+        else cfg.legend_handlelength
+    )
+    legend_labelspacing = (
+        legend_labelspacing
+        if legend_labelspacing is not None
+        else cfg.legend_labelspacing
+    )
     font_family = font_family if font_family is not None else cfg.font_family
     linewidth = linewidth if linewidth is not None else cfg.axis_linewidth
 
@@ -482,10 +570,22 @@ def add_legend_above(
     cfg = get_config()
 
     # Get values from config
-    legend_fontsize = legend_fontsize if legend_fontsize is not None else cfg.legend_fontsize
-    legend_frameon = legend_frameon if legend_frameon is not None else cfg.legend_frameon
-    legend_handlelength = legend_handlelength if legend_handlelength is not None else cfg.legend_handlelength
-    legend_labelspacing = legend_labelspacing if legend_labelspacing is not None else cfg.legend_labelspacing
+    legend_fontsize = (
+        legend_fontsize if legend_fontsize is not None else cfg.legend_fontsize
+    )
+    legend_frameon = (
+        legend_frameon if legend_frameon is not None else cfg.legend_frameon
+    )
+    legend_handlelength = (
+        legend_handlelength
+        if legend_handlelength is not None
+        else cfg.legend_handlelength
+    )
+    legend_labelspacing = (
+        legend_labelspacing
+        if legend_labelspacing is not None
+        else cfg.legend_labelspacing
+    )
     font_family = font_family if font_family is not None else cfg.font_family
     linewidth = linewidth if linewidth is not None else cfg.axis_linewidth
 
@@ -524,7 +624,8 @@ def add_legend_above(
         mfc = markerfacecolors[i] if markerfacecolors[i] is not None else color
 
         handle = mlines.Line2D(
-            [], [],
+            [],
+            [],
             color=color,
             lw=linewidth,
             linestyle=linestyles[i],
@@ -603,7 +704,9 @@ def set_xlabel(
     """
     cfg = get_config()
     fontsize = fontsize if fontsize is not None else cfg.x_axis_label_fontsize
-    fontname = fontname if fontname is not None else cfg.font_family
+    fontname = _resolve_font_family(
+        fontname if fontname is not None else cfg.font_family
+    )
     ax.set_xlabel(label, fontsize=fontsize, fontname=fontname, **kwargs)
 
 
@@ -626,7 +729,9 @@ def set_ylabel(
     """
     cfg = get_config()
     fontsize = fontsize if fontsize is not None else cfg.y_axis_label_fontsize
-    fontname = fontname if fontname is not None else cfg.font_family
+    fontname = _resolve_font_family(
+        fontname if fontname is not None else cfg.font_family
+    )
     ax.set_ylabel(label, fontsize=fontsize, fontname=fontname, **kwargs)
 
 
@@ -649,7 +754,9 @@ def set_title(
     """
     cfg = get_config()
     fontsize = fontsize if fontsize is not None else cfg.axis_title_fontsize
-    fontname = fontname if fontname is not None else cfg.font_family
+    fontname = _resolve_font_family(
+        fontname if fontname is not None else cfg.font_family
+    )
     ax.set_title(title, fontsize=fontsize, fontname=fontname, **kwargs)
 
 
@@ -725,3 +832,115 @@ def set_background_all(
     """
     for ax in axes:
         set_background(ax, color)
+
+
+def finish(ax: Axes) -> None:
+    """
+    Re-assert house CHROME style on an already-drawn axes.
+
+    Applies spines, ticks, tick-label fonts/sizes, and axis-label + title
+    fonts — exactly the same chrome that apply_style() sets.  Does NOT touch
+    data artists (Line2D, PathCollections, patches), so a user's lw=3 line or
+    explicitly coloured scatter edge is left intact.
+
+    For seaborn violin glyphs (violin bodies, inner box/whisker/median, strip
+    dots) use ``violin()`` from yplot2.plots.statistical.violin, which calls
+    ``_normalize_seaborn_glyphs(ax)`` before ``finish(ax)``.
+
+    Idempotent: calling finish() twice yields identical artist properties.
+
+    Args:
+        ax: Axes object to finalize.
+    """
+    cfg = get_config()
+    lw = cfg.axis_linewidth
+    font_family = _resolve_font_family(cfg.font_family)
+
+    # Spines
+    for spine in ax.spines.values():
+        spine.set_linewidth(lw)
+
+    # Ticks (x and y separately to preserve per-axis pad config)
+    ax.tick_params(
+        axis="x",
+        width=cfg.axis_tick_width,
+        length=cfg.axis_tick_length,
+        pad=cfg.x_axis_tick_pad,
+    )
+    ax.tick_params(
+        axis="y",
+        width=cfg.axis_tick_width,
+        length=cfg.axis_tick_length,
+        pad=cfg.y_axis_tick_pad,
+    )
+
+    # Tick-label fonts and sizes
+    for label in ax.get_xticklabels():
+        label.set_fontname(font_family)
+        label.set_fontsize(cfg.x_axis_tick_fontsize)
+    for label in ax.get_yticklabels():
+        label.set_fontname(font_family)
+        label.set_fontsize(cfg.y_axis_tick_fontsize)
+
+    # Axis-label fonts (sizes preserved — caller used set_xlabel/ylabel with explicit size)
+    if not _should_preserve_font(ax.xaxis.label.get_fontname(), cfg.preserve_font_families):
+        ax.xaxis.label.set_fontname(font_family)
+    if not _should_preserve_font(ax.yaxis.label.get_fontname(), cfg.preserve_font_families):
+        ax.yaxis.label.set_fontname(font_family)
+
+    # Title font
+    if not _should_preserve_font(ax.title.get_fontname(), cfg.preserve_font_families):
+        ax.title.set_fontname(font_family)
+
+
+def use_style() -> None:
+    """
+    Push a subset of the house Config into matplotlib rcParams.
+
+    This is the coarse global default for raw escape-hatch plots.  It is NOT
+    the per-axes uniformity guarantee — use finish()/apply_style() for that.
+
+    Imports house_palette_colors lazily to avoid a circular import via
+    plots/__init__ -> pop_avg.py importing from a partially-initialized style
+    module.
+    """
+    cfg = get_config()
+    import matplotlib as mpl
+    from matplotlib.rcsetup import cycler  # type: ignore[attr-defined]
+    from .plots.colors import house_palette_colors  # lazy — avoids circular import
+
+    mpl.rcParams.update(
+        {
+            "font.family": _resolve_font_family(cfg.font_family),
+            "axes.linewidth": cfg.axis_linewidth,
+            "xtick.labelsize": cfg.x_axis_tick_fontsize,
+            "ytick.labelsize": cfg.y_axis_tick_fontsize,
+            "savefig.dpi": 300,
+            "axes.prop_cycle": cycler(color=house_palette_colors()),
+        }
+    )
+
+
+@contextmanager
+def style() -> Generator[None, None, None]:
+    """
+    Context manager that applies house rcParams for the duration of the block
+    and restores the prior rcParams on exit.
+
+    Example::
+
+        with yp.style():
+            fig, ax = plt.subplots()
+            ax.plot(x, y)
+
+    The context is coarse (same scope as use_style()) and is NOT a substitute
+    for finish()/apply_style() per-axes enforcement.
+    """
+    import matplotlib as mpl
+
+    saved = dict(mpl.rcParams)
+    use_style()
+    try:
+        yield
+    finally:
+        mpl.rcParams.update(saved)

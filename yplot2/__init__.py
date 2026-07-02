@@ -29,6 +29,11 @@ Example usage:
 
 __version__ = "0.1.0"
 
+# Register bundled fonts FIRST (before any style/config imports that touch fonts)
+from ._fonts import register_bundled_fonts
+
+register_bundled_fonts()
+
 # Configuration
 from .config import (
     Config,
@@ -112,6 +117,9 @@ from .style import (
     apply_style,
     apply_style_to_all,
     publication_style,  # alias for apply_style
+    finish,
+    use_style,
+    style,
     remove_spines,
     clear_axes,
     clear_axes_all,
@@ -153,6 +161,9 @@ from .plots import (
     # Color utilities
     colors_for_sequence,
     NUCLEOTIDE_COLORS,
+    palette,
+    palette_hex,
+    house_palette_colors,
 )
 
 __all__ = [
@@ -226,6 +237,9 @@ __all__ = [
     "apply_style",
     "apply_style_to_all",
     "publication_style",
+    "finish",
+    "use_style",
+    "style",
     "remove_spines",
     "clear_axes",
     "clear_axes_all",
@@ -263,4 +277,7 @@ __all__ = [
     # Color utilities
     "colors_for_sequence",
     "NUCLEOTIDE_COLORS",
+    "palette",
+    "palette_hex",
+    "house_palette_colors",
 ]

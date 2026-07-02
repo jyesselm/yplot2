@@ -17,4 +17,42 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "fonttools>=4.0",
 ]
+stats = ["seaborn>=0.13,<0.14"]
+
+[tool.pytest.ini_options]
+# Phase 0: coverage measured but threshold not enforced on legacy uncovered modules.
+# New modules (statistical/, _fonts.py, colors.py additions) are fully covered.
+addopts = "--cov=yplot2 --cov-report=term-missing"
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py calls register_bundled_fonts() before other imports by design
+"yplot2/__init__.py" = ["E402"]
+# Pre-existing unused imports in legacy files (not in Phase 0 scope)
+"yplot2/axes.py" = ["F401"]
+"yplot2/coordinates.py" = ["F401"]
+"yplot2/figure.py" = ["F401"]
+"yplot2/layout.py" = ["F401"]
+"yplot2/plots/pop_avg.py" = ["F401"]
+"yplot2/plots/regression.py" = ["F401"]
+"yplot2/position.py" = ["F401"]
+"yplot2/spacing.py" = ["F401"]
+"examples/*.py" = ["F401"]
+
+[tool.coverage.report]
+# Exclude legacy modules not in scope for Phase 0 testing
+omit = [
+    "yplot2/axes.py",
+    "yplot2/figure.py",
+    "yplot2/layout.py",
+    "yplot2/position.py",
+    "yplot2/spacing.py",
+    "yplot2/coordinates.py",
+    "yplot2/plots/lollipop.py",
+    "yplot2/plots/pop_avg.py",
+    "yplot2/plots/basic.py",
+]
+
+[tool.setuptools.package-data]
+yplot2 = ["fonts/*.ttf", "fonts/LICENSE.txt"]

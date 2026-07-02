@@ -11,8 +11,8 @@ Naming conventions:
 - font_*    : Global font settings
 """
 
-from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
+from dataclasses import dataclass
+from typing import Tuple
 import copy
 
 
@@ -23,7 +23,7 @@ class Config:
     # =========================================================================
     # Global font settings
     # =========================================================================
-    font_family: str = "Arial"
+    font_family: str = "Arimo"
     # Whether to apply font family changes in apply_style
     apply_fonts: bool = True
     # Whether to apply font size changes in apply_style
@@ -67,8 +67,8 @@ class Config:
     # =========================================================================
     plot_linewidth: float = 1.5
     plot_markersize: float = 4
-    plot_capsize: float = 3.0         # Error bar caps
-    plot_capthick: float = 0.75       # Error bar cap thickness
+    plot_capsize: float = 3.0  # Error bar caps
+    plot_capthick: float = 0.75  # Error bar cap thickness
 
     # =========================================================================
     # Legend settings
@@ -89,13 +89,16 @@ class Config:
     panel_label_fontsize: float = 12
     panel_label_fontweight: str = "bold"
     panel_label_offset: Tuple[float, float] = (-0.4, 0.15)  # (dx, dy) inches for plots
-    panel_label_offset_image: Tuple[float, float] = (0.00, 0.00)  # (dx, dy) inches for images
+    panel_label_offset_image: Tuple[float, float] = (
+        0.00,
+        0.00,
+    )  # (dx, dy) inches for images
 
     # =========================================================================
     # Colorbar settings
     # =========================================================================
-    colorbar_width: float = 0.1       # inches
-    colorbar_pad: float = 0.05        # inches
+    colorbar_width: float = 0.1  # inches
+    colorbar_pad: float = 0.05  # inches
     colorbar_tick_fontsize: float = 6
 
 
@@ -123,8 +126,9 @@ def set_config(**kwargs) -> None:
         if hasattr(_config, key):
             setattr(_config, key, value)
         else:
-            raise ValueError(f"Unknown config option: {key}. "
-                           f"Available: {list_config_options()}")
+            raise ValueError(
+                f"Unknown config option: {key}. Available: {list_config_options()}"
+            )
 
 
 def get_config_value(key: str):
@@ -156,15 +160,15 @@ def print_config() -> None:
     groups = {}
     for key in list_config_options():
         # Map x_axis_* and y_axis_* to 'axis' group
-        if key.startswith('x_axis_') or key.startswith('y_axis_'):
-            prefix = 'axis'
+        if key.startswith("x_axis_") or key.startswith("y_axis_"):
+            prefix = "axis"
         else:
-            prefix = key.split('_')[0]
+            prefix = key.split("_")[0]
         if prefix not in groups:
             groups[prefix] = []
         groups[prefix].append(key)
 
-    for prefix in ['font', 'axis', 'plot', 'legend', 'text', 'panel', 'colorbar']:
+    for prefix in ["font", "axis", "plot", "legend", "text", "panel", "colorbar"]:
         if prefix in groups:
             print(f"\n{prefix.upper()}:")
             for key in sorted(groups[prefix]):
