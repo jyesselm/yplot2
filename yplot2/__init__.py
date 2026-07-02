@@ -134,6 +134,9 @@ from .style import (
     set_background_all,
 )
 
+# Catalog decorator (pure — no seaborn/pandas)
+from .catalog import catalog
+
 # Canvas: GridSpec7, figure(), figure7()
 from .canvas import GridSpec7, figure, figure7
 
@@ -286,6 +289,8 @@ __all__ = [
     "palette",
     "palette_hex",
     "house_palette_colors",
+    # Catalog decorator
+    "catalog",
     # Canvas
     "GridSpec7",
     "figure",

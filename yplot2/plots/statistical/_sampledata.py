@@ -1,8 +1,8 @@
 """
-Synthetic RNA-shaped sample data for Phase 0 spike tests.
+Synthetic sample data for Phase 0 and Phase 2 spike tests.
 
-NOT reachable from yplot2.__init__ — import only inside tests.
-Requires pandas (available via [stats] extra).
+NOT reachable from yplot2.__init__ — import only inside tests and demo fns.
+Requires pandas/numpy (available via [stats] extra).
 """
 
 import numpy as np
@@ -33,3 +33,21 @@ def make_sample_df(seed: int = 42, n_per_nuc: int = 40) -> pd.DataFrame:
         for v in values:
             rows.append({"nuc": nuc, "reactivity": float(v)})
     return pd.DataFrame(rows)
+
+
+def make_xy_df(seed: int = 42, n: int = 2000) -> pd.DataFrame:
+    """Build a deterministic bivariate-normal sample for 2-D density plots.
+
+    Columns: ``x`` (float), ``y`` (float).
+
+    Args:
+        seed: RNG seed for reproducibility.
+        n: Number of data points.
+
+    Returns:
+        DataFrame with shape (n, 2).
+    """
+    rng = np.random.default_rng(seed)
+    x = rng.normal(loc=0.0, scale=1.0, size=n)
+    y = rng.normal(loc=0.0, scale=1.0, size=n)
+    return pd.DataFrame({"x": x, "y": y})

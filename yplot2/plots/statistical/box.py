@@ -1,5 +1,5 @@
 """
-Seaborn-backed violin plot wrapper with house-style enforcement.
+Seaborn-backed box plot wrapper with house-style enforcement.
 
 Requires the [stats] extra: pip install yplot2[stats]
 """
@@ -13,11 +13,11 @@ from ._overlay import _require_seaborn, _draw_strip
 
 
 @catalog(
-    tags=["distribution", "categorical", "nucleotide", "seaborn"],
+    tags=["distribution", "categorical", "comparison", "seaborn"],
     data_shape="long-df",
     kind="panel",
 )
-def violin(
+def box(
     ax: Axes,
     data: Any,
     x: str,
@@ -31,22 +31,19 @@ def violin(
     **kw: Any,
 ) -> Axes:
     """
-    Draw a house-styled violin plot on *ax*.
+    Draw a house-styled box plot on *ax*.
 
     Applies ``saturation=1`` to seaborn to prevent the default 0.75 desaturation
     of palette colors, normalises seaborn glyph linewidths via
-    ``normalize_glyphs()``, and calls ``finish(ax)`` for house chrome
-    (spines, ticks, tick-label fonts, axis-label fonts).
+    ``normalize_glyphs()``, and calls ``finish(ax)`` for house chrome.
 
     When ``strip=True``, a jittered strip overlay is drawn with RNG seeded by
-    *seed* for deterministic renders. Large groups are capped at
-    *max_strip_points* rows per group via ``cap_strip_groups`` (``None`` =
-    no cap). The global numpy RNG state is restored after drawing.
+    *seed*. Large groups are capped at *max_strip_points* rows per group
+    (``None`` = no cap). The global numpy RNG state is restored after drawing.
 
     No-hue coloring: when *hue* is ``None``, seaborn is called with
-    ``hue=x, legend=False`` to color violins by the x category without
-    triggering the seaborn "palette without hue" FutureWarning (hard-break
-    at seaborn 0.14). When *hue* is explicitly set, the standard
+    ``hue=x, legend=False`` to avoid the "palette without hue" FutureWarning
+    (hard-break at seaborn 0.14). When *hue* is explicitly set, the standard
     ``hue_order`` path is used instead.
 
     Args:
@@ -59,7 +56,7 @@ def violin(
         strip: Draw a jittered strip overlay (opt-in; default False).
         max_strip_points: Max strip points per group; None disables the cap.
         seed: RNG seed for reproducible jitter (only meaningful when strip=True).
-        **kw: Extra kwargs forwarded to ``sns.violinplot``.
+        **kw: Extra kwargs forwarded to ``sns.boxplot``.
 
     Returns:
         The same *ax*, after styling.
@@ -67,7 +64,7 @@ def violin(
     Raises:
         ImportError: If seaborn is not installed (pip install yplot2[stats]).
     """
-    sns = _require_seaborn("violin")
+    sns = _require_seaborn("box")
 
     import numpy as np
     from ..colors import palette, hue_order as get_hue_order
@@ -87,7 +84,7 @@ def violin(
     rng_state = np.random.get_state()
     np.random.seed(seed)
     try:
-        sns.violinplot(
+        sns.boxplot(
             ax=ax,
             data=data,
             x=x,
@@ -95,7 +92,7 @@ def violin(
             hue=effective_hue,
             palette=pal,
             hue_order=hue_ord,
-            saturation=1,  # prevent 0.75 desaturation
+            saturation=1,
             linewidth=cfg.axis_linewidth,
             **merged_kw,
         )
@@ -119,16 +116,16 @@ def violin(
     return ax
 
 
-def demo_violin():
-    """Return a figure with a house-styled violin plot from bundled sample data.
+def demo_box():
+    """Return a figure with a house-styled box plot from bundled sample data.
 
     Returns:
-        matplotlib.figure.Figure with one axes showing a nucleotide violin.
+        matplotlib.figure.Figure with one axes showing a nucleotide box plot.
     """
     import matplotlib.pyplot as plt
     from ._sampledata import make_sample_df
 
     df = make_sample_df()
     fig, ax = plt.subplots(figsize=(4, 3))
-    violin(ax, df, x="nuc", y="reactivity", hue="nuc")
+    box(ax, df, x="nuc", y="reactivity", hue="nuc")
     return fig

@@ -1,288 +1,449 @@
-# Implementation Plan — yplot2 Phase 0 (go/no-go spike) + gated catalog seed
+# yplot2 Phase 2 — Seaborn wrapper suite + strip large-N fix + catalog SEED
 
-> Branch: `phase0-font-seaborn-spike`
-> Source strategy: `~/.claude/plans/yplot2-lab-engine-strategy.md` (Phase 0).
-> **This plan builds Phase 0 ONLY.** Phase 0 is a GO/NO-GO gate; do NOT build the
-> catalog system, the seaborn wrapper suite, or the layout presets until the gate
-> passes. The catalog-seed shape is described at the end for context, marked GATED.
-> All dimensions in inches. House font decision: **Arimo** (OFL-1.1, metric-
-> compatible with Arial), bundled in-package as genuine static Regular/Bold/Italic/
-> BoldItalic faces (instanced from the variable font via fontTools; the old static
-> `apache/arimo/*.ttf` paths no longer exist — Arimo moved to `ofl/arimo` VFs).
-
-## Goal of Phase 0
-Prove the two load-bearing assumptions of the whole strategy in ~2–3 days, cheaply,
-before any build-out:
-1. **Font determinism** — a bundled Arimo makes headless (Agg) text render identically
-   on any machine (not dependent on a system Arial).
-2. **Seaborn uniformity** — a seaborn violin can be made to match house style *exactly*
-   (glyph linewidths + exact palette hex + deterministic render) via `saturation=1` +
-   explicit palette + `hue_order` + a post-draw `finish(ax)` + seeded RNG.
-
-If both hold AND rebuilding one real figure in yplot2 is cleaner than forking a
-`plotting.py`, we proceed to Phase 1. If not, we take the documented fallback
-(drop global-style ambition; ship per-axes `apply_style` wrappers).
+> Handoff for `py-coder`. Self-contained. Do NOT deviate silently; if a signature
+> below is impossible, stop and report rather than improvise.
+> Style gate: `~/.claude/standards/python-style.md` (≤30-line functions, ≤3 indent
+> levels, complexity ≤10, ≤4 params, full type hints + docstrings, ruff/mypy clean,
+> ≥90% coverage on NEW modules). All 103 existing tests must stay green.
 
 ---
 
-## Toolchain / setup (run first, and after each task)
-- `pip install -e ".[dev,stats]"` (adds seaborn — see Task 0.0).
-- Tests: `pytest -q`
-- Determinism runs must force the Agg backend: tests set
-  `matplotlib.use("Agg")` before importing pyplot.
-- No linter is configured; match existing style (type hints, docstrings, `Optional`).
+## Design resolutions (Q1–Q5 — AUTHORITATIVE; override any conflicting task text below)
+
+- **Q1 heatmap2d / hexbin backend:** `heatmap2d()` = numpy `histogram2d` + `imshow` +
+  a house-styled colorbar (`style_colorbar`); `hexbin()` = native `ax.hexbin` + styled
+  colorbar. BOTH are **seaborn-free** and deterministic (this matches how the papers
+  actually make 2D-hist/density plots — raw `imshow`/`hexbin`). Therefore ONLY
+  `violin`/`box`/`kde` carry the lazy-seaborn import guard; `heatmap2d`/`hexbin` do not
+  import seaborn at all. All four still house-style via `finish(ax)` (+ styled colorbar).
+- **Q2 + Q5 strip policy:** strip overlays are **OPT-IN everywhere** — `violin(strip=False)`
+  AND `box(strip=False)` by default (papers use `inner="box"` with no strip; this also
+  removes the large-N footgun the real dms_vs_tmo Fig1D rebuild exposed). The concrete
+  wrapper signatures below MUST read `strip=False` (do not copy any `strip=True` line).
+  When a caller passes `strip=True`, apply a SEEDED per-group auto-subsample capped at
+  `max_strip_points=1000` (param; `None` = no cap). **`cap_strip_groups` MUST use the
+  CLAMP form** (plan-critic blocker 1): `df.groupby(keys, group_keys=False).apply(lambda
+  g: g.sample(min(len(g), max_points), random_state=seed))`. Do NOT use
+  `groupby(...).sample(n=max_points)` — it raises `ValueError` when any group is smaller
+  than `max_points` (the everyday 40-pts/group path). **Dedupe `keys`** when `hue == x`
+  (use `[x]`, not `[x, x]`). **NO test edit needed:** verified that
+  `tests/test_phase0_spike.py` always calls `violin(..., strip=...)` with an explicit
+  `strip`, so flipping the default to `False` leaves all 103 tests green untouched.
+- **Q3 normalizer location:** shared `normalize_glyphs(ax, lw)` lives in
+  `plots/statistical/_style.py` (seaborn-specific); do NOT promote to top-level `style.py`.
+  Refactor `violin.py` to import it; delete `violin._normalize_seaborn_glyphs` and update
+  the one `style.py` docstring mention.
+- **Q4 demos & catalog exposure:** reuse the Phase-0 `make_sample_df` fixture + add one
+  `make_xy_df`; `demo_<name>()` build a bare `plt.subplots()` panel (NOT `figure7`).
+  Expose `catalog` at top-level `yplot2` (it's pure — no seaborn). CRITICAL: `demo_*`
+  functions and the wrapper modules must NOT be import-time reachable from
+  `yplot2/__init__` (mirror how `violin` is kept out of `plots/__init__`); `import yplot2`
+  stays seaborn-free.
 
 ---
 
-## Task 0.0 — Deps + housekeeping
-**Files:** `pyproject.toml`, delete `build/`
-1. In `pyproject.toml`, add an optional extra:
-   ```toml
-   [project.optional-dependencies]
-   stats = ["seaborn>=0.13,<0.14"]   # pinned; finish() introspects seaborn artists
-   ```
-   Keep `dev` as-is. (seaborn stays OPTIONAL — core must import without it.)
-2. `rm -rf build/` — stale shadow copy of the whole package (already gitignored,
-   git-untracked). It will otherwise poison future package-walking. Confirm
-   `git status` shows nothing (it's ignored).
-**Acceptance:** `python -c "import yplot2"` works with seaborn absent; `pip install -e
-".[stats]"` pulls seaborn 0.13.x; `build/` gone.
+## What's already built (do NOT redo)
 
-## Task 0.1 — Bundle + register Arimo font
-**Files:** `yplot2/fonts/` (new, with TTFs + LICENSE), `yplot2/_fonts.py` (new),
-`yplot2/__init__.py` (register on import)
-1. Vendicate Arimo TTFs into `yplot2/fonts/`: `Arimo-Regular.ttf`, `Arimo-Bold.ttf`,
-   `Arimo-Italic.ttf`, `Arimo-BoldItalic.ttf`. Source: Google Fonts
-   (`github.com/google/fonts/tree/main/ofl/arimo`), OFL-1.1 — instance static
-   Regular(400)/Bold(700)/Italic/BoldItalic from the VFs via `fontTools.varLib.instancer`.
-   **Also copy the OFL `LICENSE.txt` into `yplot2/fonts/` (redistribution requires it).**
-2. Package data: ensure the TTFs ship — add to `pyproject.toml`:
-   ```toml
-   [tool.setuptools.package-data]
-   yplot2 = ["fonts/*.ttf", "fonts/LICENSE.txt"]
-   ```
-3. `yplot2/_fonts.py`:
-   ```python
-   from pathlib import Path
-   import matplotlib.font_manager as fm
+- **Phase 0** (a44e397): bundled Arimo font (`_fonts.register_bundled_fonts()` at import);
+  `style.finish(ax)` (chrome-only, idempotent, does NOT touch data artists);
+  `violin.py::_normalize_seaborn_glyphs(ax, lw)` (violin-local glyph flattener);
+  palette registry in `plots/colors.py`: `palette()/palette_hex()/house_palette_colors()/`
+  `hue_order()/register_seaborn_palettes()` (`nucleotide` + `conditions`);
+  `violin()` wrapper (seaborn lazy, `import yplot2` seaborn-free); `use_style()/style()`.
+  Sample data: `plots/statistical/_sampledata.py::make_sample_df(seed, n_per_nuc)`
+  → long DataFrame `nuc`(str)/`reactivity`(float).
+- **Phase 1** (39c064b): `canvas.figure()/figure7()`; `composite.annotate/line_annotation/`
+  `distance_label`; `figure.coord_from_image`; single style engine `apply_style`+`finish`
+  via `style._enforce_chrome`; `figure.add_colorbar(fig, ax, mappable, coord, fig_size, ...)`.
+- **Config** (`config.get_config()`): fields used here — `axis_linewidth=0.75`,
+  `colorbar_tick_fontsize=6`, `font_family="Arimo"`.
+- **pyproject**: optional dep `stats = ["seaborn>=0.13,<0.14"]` (pandas arrives transitively
+  via seaborn). Base deps: matplotlib, numpy only.
+- **Contract to preserve**: `import yplot2` must NOT import seaborn/pandas. The statistical
+  wrappers are reachable ONLY via explicit submodule import (mirror violin). They are NOT
+  wired into `plots/__init__.py` or `yplot2/__init__.py`.
 
-   _FONT_DIR = Path(__file__).parent / "fonts"
-
-   def register_bundled_fonts() -> None:
-       """Register bundled Arimo with matplotlib. Idempotent."""
-       for ttf in _FONT_DIR.glob("*.ttf"):
-           try:
-               fm.fontManager.addfont(str(ttf))
-           except Exception:
-               pass  # never break import on a font hiccup
-   ```
-4. Call `register_bundled_fonts()` once at the TOP of `yplot2/__init__.py` (before
-   other imports that touch style). Must be side-effect-cheap and not render anything.
-5. Make Arimo the house default: in `config.py`, change `Config.font_family` default
-   from `"Arial"` to `"Arimo"`. In `style.py::_resolve_font_family`, **rewrite the
-   `str` branch** (currently `style.py:38-40` returns the name unchanged with NO
-   availability check): if the requested family is available, return it; else if the
-   request is `"Arial"` (or Arial-family) and Arimo is available, return `"Arimo"`;
-   else fall back to the current behavior. So legacy `"Arial"` requests resolve
-   deterministically to the bundled metric-compatible face on any machine.
-6. **Close the setter bypass** (plan-critic #5): `set_xlabel`/`set_ylabel`/`set_title`
-   (`style.py:607,630,653`) and `text()` (`basic.py:482`) pass `fontname`/`fontfamily`
-   straight to matplotlib, bypassing resolution — so explicit `fontname="Arial"` in
-   `examples/example_10/11` would NOT resolve to Arimo on a non-Arial machine. Route
-   these four call sites' font name through `_resolve_font_family(...)` before passing
-   to matplotlib.
-7. **Ship the TTFs in sdists too:** add a `MANIFEST.in` with
-   `recursive-include yplot2/fonts *.ttf *.txt`, and add a
-   `[tool.setuptools.packages.find]` block if package discovery needs it. (The Task 0.1
-   acceptance below uses an editable install, which reads from the source tree and does
-   NOT prove shipping — so also add the built-wheel check.)
-**Acceptance (write `tests/test_fonts.py`):**
-- `fm.findfont("Arimo", fallback_to_default=False)` resolves to a path **inside**
-  `yplot2/fonts/`.
-- After `register_bundled_fonts()`, `"Arimo"` is in
-  `{f.name for f in fm.fontManager.ttflist}`.
-- `_resolve_font_family("Arial")` returns `"Arimo"` when Arial is hidden (monkeypatch
-  the available-fonts set) and returns `"Arial"` when it is present.
-- Importing `yplot2` does not raise and does not create any figure.
-- **Shipping check:** `python -m build --wheel` then assert the wheel zip contains
-  `yplot2/fonts/Arimo-Regular.ttf` and `fonts/LICENSE.txt` (or skip if `build` absent,
-  with an xfail note).
-
-## Task 0.2 — `use_style()` rcParams bridge (coarse default, spike scope)
-**Files:** `yplot2/style.py`, export in `__init__.py`
-1. Add `use_style()` and a `style()` context manager that push a SUBSET of `Config`
-   into `matplotlib.rcParams`: `font.family=Arimo`, `axes.linewidth`,
-   `xtick.labelsize`/`ytick.labelsize` (use the x/y tick fontsizes — pick x for the
-   single rcParam, document the limitation), `savefig.dpi`, `axes.prop_cycle` from the
-   house palette (Task 0.3). This is the COARSE default for raw escape-hatch plots —
-   it is explicitly NOT the uniformity guarantee (that's `finish`/`apply_style`).
-   ```python
-   def use_style() -> None:
-       cfg = get_config()
-       import matplotlib as mpl
-       from .plots.colors import house_palette_colors  # LAZY import (plan-critic R2 #3):
-       # a top-level import would trigger plots/__init__ -> pop_avg.py:18 importing from a
-       # partially-initialized style module -> ImportError at `import yplot2`.
-       mpl.rcParams.update({
-           "font.family": _resolve_font_family(cfg.font_family),
-           "axes.linewidth": cfg.axis_linewidth,
-           "xtick.labelsize": cfg.x_axis_tick_fontsize,
-           "ytick.labelsize": cfg.y_axis_tick_fontsize,
-           "savefig.dpi": 300,
-           "axes.prop_cycle": mpl.cycler(color=house_palette_colors()),
-       })
-   ```
-**Acceptance:** after `yp.use_style()`, `mpl.rcParams["font.family"]` contains Arimo
-and `axes.linewidth == cfg.axis_linewidth`.
-
-## Task 0.3 — Palette registry (minimal, spike scope)
-**Files:** `yplot2/plots/colors.py` (extend), export helpers
-1. Add a named-palette dict seeded from the existing `NUCLEOTIDE_COLORS` plus a
-   `"conditions"` palette (2–3 recurring paper hexes, e.g. `#2e89c7`, `#ff8b26`).
-2. Add `palette(name) -> list[str]/dict`, `palette_hex(name, key) -> str`, and
-   `house_palette_colors() -> list[str]` (the default prop_cycle).
-3. Register nucleotide colors with seaborn as a named palette IF seaborn present
-   (guarded import). Provide a `hue_order` helper so categorical hue→color is explicit.
-**Acceptance:** `yp.palette_hex("nucleotide", "A")` returns the exact house hex for A.
-
-## Task 0.4 — `finish(ax)` + prototype `violin` wrapper (the spike core)
-**Files:** `yplot2/style.py` (`finish`), `yplot2/plots/statistical/__init__.py` (new,
-seaborn-free at load), `yplot2/plots/statistical/violin.py` (new)
-1. `finish(ax)`: re-assert house style on an already-drawn axes by reusing
-   `apply_style` internals PLUS coercing artist linewidths across **all three** artist
-   containers (plan-critic #1 — verified: seaborn's violin inner box/whisker/median are
-   `Line2D` in `ax.lines`, NOT patches, and seaborn scales them to 1.125/3.375/1.5 even
-   when you pass `linewidth=0.75`):
-   - `ax.collections` (violin bodies / strip PathCollections) → edge/line width
-   - `ax.patches` (box-type bodies) → edge width
-   - `ax.lines` (inner box/whisker/median Line2D) → `set_linewidth`
-   **House-look decision (explicit):** flatten the violin body + inner `Line2D` to
-   `cfg.axis_linewidth` — we deliberately drop seaborn's median/box/whisker width
-   hierarchy for a single uniform house weight. **EXCLUDE strip/scatter
-   `PathCollection`s from the linewidth flatten** (plan-critic R2 #1): their marker
-   linewidth is 0, and flattening to 0.75 would draw a gray edge ring on every jittered
-   dot. Detect them (marker collections have `get_offsets()` with points / zero base
-   linewidth) and either skip them or set their `edgecolor="none"`. Keep test (i) in
-   sync so it doesn't then assert lw==0.75 on strip markers.
-   (If we later want the median emphasized, that's a config knob, not Phase 0.)
-   **Must be idempotent** — calling `finish` twice yields identical artist properties
-   (add an explicit test).
-2. `violin(ax, data, x, y, *, hue=None, palette_name="nucleotide", strip=True, seed=0, **kw)`:
-   ```python
-   def violin(ax, data, x, y, *, hue=None, palette_name="nucleotide",
-              strip=True, seed=0, **kw):
-       import numpy as np, seaborn as sns
-       from ..colors import palette
-       from ...style import finish
-       from ...config import get_config
-       rng_state = np.random.get_state()
-       np.random.seed(seed)                       # determinism for strip jitter
-       try:
-           pal = palette(palette_name)            # explicit dict, not seaborn default
-           sns.violinplot(ax=ax, data=data, x=x, y=y, hue=hue,
-                          palette=pal, saturation=1,   # kill 0.75 desaturation
-                          linewidth=get_config().axis_linewidth, **kw)
-           if strip:                              # exercises the seed -> real jitter
-               sns.stripplot(ax=ax, data=data, x=x, y=y, hue=hue,
-                             palette=pal, size=2, jitter=True, dodge=bool(hue),
-                             legend=False)
-       finally:
-           np.random.set_state(rng_state)         # don't leak global RNG state
-       finish(ax)
-       return ax
-   ```
-   `strip=True` by default so the determinism assertion (Task 0.5 iv) actually
-   exercises RNG jitter — the real risk the strategy named (plan-critic #3).
-3. **Optional-seaborn hole (plan-critic #2 — BLOCKING):** `statistical/__init__.py` must
-   NOT import seaborn or the violin module at load. Do **NOT** add `violin` to
-   `yplot2/plots/__init__.py`'s eager imports or to `yplot2/__init__.py`. `violin` is
-   reachable only via `from yplot2.plots.statistical.violin import violin`. Same rule
-   for any pandas-using helper (pandas is only present via `[stats]`).
-**Acceptance:** covered by Task 0.5, plus the no-seaborn subprocess test there.
-
-## Task 0.5 — The spike acceptance test (THE GATE, automated half)
-**Files:** `tests/test_phase0_spike.py`, fixture in
-`yplot2/plots/statistical/_sampledata.py` (NOT reachable from `yplot2/__init__`;
-pandas-using, so it lives under the seaborn/`[stats]` side — plan-critic #2)
-1. Add a deterministic synthetic RNA-shaped dataframe fixture (categories A/C/G/U,
-   numeric reactivity, seeded) in `_sampledata.py`; NO external data dependency. Import
-   it only inside the test, never at package load.
-2. Test file sets `matplotlib.use("Agg")` before importing pyplot, and imports violin
-   via `from yplot2.plots.statistical.violin import violin`. It asserts, on
-   `violin(ax, sample, x="nuc", y="reactivity", hue="nuc", seed=0)`:
-   - **(i) Linewidth:** across `ax.collections` + `ax.patches` + `ax.lines`, every
-     style-bearing artist linewidth `== cfg.axis_linewidth` (within 1e-6). Explicitly
-     iterate `ax.lines` (the inner box/whisker/median) — verified these render at
-     1.125/3.375/1.5 pre-`finish`, so this catches whether `finish` flattened them.
-   - **(ii) Exact palette hex:** for each category body, `to_hex(body.get_facecolor())`
-     `== to_hex(palette_hex("nucleotide", <letter>))` — **both sides normalized through
-     `matplotlib.colors.to_hex`** because `NUCLEOTIDE_COLORS` are named colors
-     (`"red"`→`#ff0000`), not hex (plan-critic #4). This is the assertion seaborn's
-     default `saturation=0.75` would fail.
-   *Impl traps (plan-critic R2 #2):* `collection.get_linewidth()` returns an ARRAY
-   (`[0.75]`), not a scalar — compare elementwise, not `== float`. For (ii), select the
-   violin **body** collections (`FillBetweenPolyCollection`) and skip strip
-   `PathCollection`s (they also carry the palette facecolor and return an `(N,4)` array
-   that breaks `to_hex`); use `body.get_facecolor()[0]`.
-   - **(iii) Font:** tick labels report family Arimo.
-   - **(iv) Determinism (with jitter):** because `strip=True`, the strip overlay uses
-     RNG — render twice with `seed=0` to separate PNG buffers (Agg, fixed dpi) and
-     assert byte-identical; then render with `seed=1` and assert it DIFFERS (proves the
-     seed is live, not dead code — plan-critic #3).
-3. **No-seaborn import test** (`tests/test_no_seaborn_import.py`): run a subprocess with
-   seaborn made unimportable (e.g. `sys.modules["seaborn"]=None` via a `-c` snippet, or
-   a fake meta-path finder) and assert `import yplot2` still succeeds. This actually
-   exercises the optional-dep guarantee (the `[stats]` extra otherwise installs seaborn
-   into the test env, so it'd never be tested — plan-critic #2).
-**Acceptance:** `pytest tests/test_phase0_spike.py tests/test_no_seaborn_import.py -q`
-passes. If assertion (i), (ii), or (iv) fails, that is the spike telling us the design
-needs adjustment (more `finish` coverage; palette normalization; jitter seeding) — fix
-within Phase 0 scope before declaring GO. (All three now in the iterate clause.)
-
-## Task 0.6 — Live-figure reproduction (THE GATE, human half) — NEEDS USER INPUT
-**Files:** `scripts/phase0_live_figure.py`
-1. Rebuild ONE real figure using the new path and eyeball it against the published
-   version. Recommended target: a **`2025_dms_vs_tmo_paper` violin panel** (violins are
-   ~40% of the lab's plots, so this is the highest-signal test).
-2. **BLOCKED ON:** the user pointing at (a) which figure to reproduce and (b) the path
-   to its analysis-ready dataframe. Until provided, implement the script against the
-   synthetic fixture as a smoke run and leave a `TODO(user): wire real data`.
-**Acceptance:** the figure renders house-styled with ≤1 explicit style call, and the
-author judges it cleaner than the paper's `plotting.py` path.
+**Reference implementation — copy this pattern EXACTLY:** `yplot2/plots/statistical/violin.py`
+(lazy `import seaborn` inside the fn with a helpful ImportError; explicit `palette` dict +
+`hue_order` when `hue` given; `saturation=1` on categorical seaborn calls;
+`linewidth=cfg.axis_linewidth`; save/restore `np.random` state around any jittered draw;
+call the glyph normalizer then `finish(ax)`; `return ax`; `**kw` passthrough = escape hatch).
 
 ---
 
-## DECISION GATE (end of Phase 0)
-**GO** (proceed to Phase 1 + catalog seed) iff:
-- Task 0.5 passes all four assertions, AND
-- Task 0.6 reproduces a real violin at house style with no per-figure restyling, AND
-- doing so felt lighter than the existing per-paper `plotting.py`.
+## Goal
 
-**NO-GO fallback** (documented in strategy): abandon the `use_style()` global-rcParams
-ambition; keep `finish`/`apply_style` as explicit per-axes calls inside thin wrappers
-(still one call per panel). Everything else in the strategy (font bundling, palette,
-tests, catalog, repro spine) still proceeds — only the "coarse global default" is cut.
+Ship five house-styled statistical capsules (`violin` refactor + `box`, `kde`,
+`heatmap2d`, `hexbin`), fix the large-N strip overlay that swamped the dms_vs_tmo Fig1D
+rebuild, and lay a metadata-only catalog SEED (`@catalog` decorator + `vocab.py`), with
+NO catalog build tooling (deferred to Phase 3).
 
 ---
 
-## GATED FOLLOW-ON (do NOT build until GATE passes) — catalog seed shape
-For context only, so the coder knows where this heads (full spec in the strategy doc):
-- `@catalog(tags, data_shape[, kind])` decorator that only **attaches attributes** to a
-  plot function (no live global registry).
-- Folder taxonomy `yplot2/plots/{primitives,statistical,domain,composites,templates}/`;
-  category derived from folder.
-- `vocab.py` controlled vocabulary for tags + data_shape tokens (build hard-fails on
-  unknown token for a cataloged capsule; agents append tokens in-PR with justification).
-- Each capsule ships a `demo_<name>()` (which ARE the migrated `examples/`); the demo is
-  the gallery thumbnail + structural test + doc + `catalog.json` row.
-- Style gate = **artist-property assertion** on the final demo figure (never a pixel
-  hash). Membership requires a passing demo. Collector walks the package via
-  `pkgutil.walk_packages(__path__)`, never the filesystem.
-- Write the first real wrapper (`violin`, above) AS the first capsule when this lands —
-  zero retrofit.
+## Design
 
-## Notes for the reviewer
-- Verify Arimo LICENSE is present in `yplot2/fonts/` and package-data ships the TTFs.
-- Verify `import yplot2` with seaborn UNINSTALLED still succeeds (optional-dep guard).
-- Verify `finish` idempotency test exists and passes.
-- Verify no code walks the filesystem for modules (guards against the `build/` shadow).
+New / changed modules (all under `yplot2/plots/statistical/` unless noted):
+
+- `_style.py` (~55 lines) — shared post-draw styling of seaborn/mpl artists.
+  `normalize_glyphs(ax, lw)` (the flattener factored out of violin.py) and
+  `style_colorbar(cbar, cfg)` (house-style a colorbar's outline + tick labels).
+- `_overlay.py` (~45 lines) — `cap_strip_groups(data, group_keys, max_points, seed)`
+  returns a per-group seeded subsample so strip/point overlays never swamp large N.
+- `violin.py` (refactor, stays ~120 lines) — drop the private flattener, import
+  `normalize_glyphs`; add `max_strip_points` + `cap_strip_groups`; add `@catalog` + `demo_violin()`.
+- `box.py` (~120 lines) — `box()` (+ opt-in strip overlay, same discipline) + `demo_box()`.
+- `kde.py` (~110 lines) — `kde()` + `demo_kde()`.
+- `heatmap2d.py` (~130 lines) — `heatmap2d()` (2D histogram, house-styled colorbar) + `demo_heatmap2d()`.
+- `hexbin.py` (~120 lines) — `hexbin()` (native `ax.hexbin`, house-styled colorbar) + `demo_hexbin()`.
+- `_sampledata.py` (extend, ~+20 lines) — add `make_xy_df(seed, n)` bivariate fixture for the 2D capsules.
+
+Catalog seed (top-level, seaborn-free, pure):
+
+- `yplot2/vocab.py` (~70 lines) — controlled vocabulary + validators. No seaborn/pandas/mpl.
+- `yplot2/catalog.py` (~70 lines) — `@catalog(...)` decorator, attribute-attach + vocab
+  validation ONLY. No registry, no collector, no json, no gallery (all Phase 3).
+
+New tests (mirror src):
+
+- `tests/test_shared_statistical_style.py`
+- `tests/test_strip_threshold.py`
+- `tests/test_statistical_wrappers.py`
+- `tests/test_catalog.py`
+
+---
+
+## Style / structural decisions (restate the constraints)
+
+- **Layer + raw-axes escape hatch.** Every wrapper is `fn(ax, data, ...) -> ax`, forwards
+  `**kw` to the underlying seaborn/mpl call, and never blocks interop.
+- **`import yplot2` stays seaborn-free.** `catalog.py`/`vocab.py` import nothing heavy.
+  The wrapper modules keep seaborn/pandas imports *inside* the function body (lazy).
+  They are NOT added to any `__init__`. A new subprocess test guards this.
+- **Reuse, no duplication.** `normalize_glyphs` has ONE definition (`_style.py`); violin,
+  box reuse it. `finish` is the only chrome enforcer. Palette via the existing
+  `colors.palette()/hue_order()`. Colorbar tick font via `cfg.colorbar_tick_fontsize`.
+- **Determinism.** Any jitter/subsample uses an explicit `seed`; save/restore global
+  `np.random` state around seaborn draws (as violin already does).
+- **@catalog is trivial** — attribute attach + vocab validation. The collector, gallery,
+  fingerprint gate, and `catalog.json` are DEFERRED to Phase 3. Do NOT build them.
+- **Do NOT move** basic.py / regression.py / pop_avg.py / lollipop.py into folders now
+  (avoids import churn). Only `statistical/` wrappers are capsules this phase.
+
+### Functions that may bump the ≤30-line limit (call-outs)
+
+- `heatmap2d()` — compute hist2d + imshow + colorbar + house-style it can crowd 30 lines.
+  **Mitigation:** push colorbar styling into `_style.style_colorbar()` and the histogram
+  math into a private `_hist2d_image(...)` helper so the public body stays a short story.
+- `box()` with the strip branch — keep the strip overlay in a private `_draw_strip(...)`
+  helper shared in spirit with violin (do not over-abstract on the 2nd use; a per-module
+  private helper is fine, the *data-capping* is the shared piece via `cap_strip_groups`).
+
+---
+
+## Files
+
+| File | Action | Lines Est. | What |
+|------|--------|-----------:|------|
+| yplot2/plots/statistical/_style.py | create | ~55 | `normalize_glyphs`, `style_colorbar` |
+| yplot2/plots/statistical/_overlay.py | create | ~45 | `cap_strip_groups` |
+| yplot2/plots/statistical/violin.py | edit | ~120 | reuse `normalize_glyphs`; add cap + `@catalog` + demo |
+| yplot2/plots/statistical/box.py | create | ~120 | `box()` (+strip) + `demo_box` |
+| yplot2/plots/statistical/kde.py | create | ~110 | `kde()` + `demo_kde` |
+| yplot2/plots/statistical/heatmap2d.py | create | ~130 | `heatmap2d()` + `demo_heatmap2d` |
+| yplot2/plots/statistical/hexbin.py | create | ~120 | `hexbin()` + `demo_hexbin` |
+| yplot2/plots/statistical/_sampledata.py | edit | +~20 | add `make_xy_df` |
+| yplot2/vocab.py | create | ~70 | controlled vocabulary + validators |
+| yplot2/catalog.py | create | ~70 | `@catalog` decorator (attach + validate) |
+| yplot2/style.py | edit | ~1 | fix docstring ref to the moved helper |
+| tests/test_shared_statistical_style.py | create | ~90 | `normalize_glyphs` + `style_colorbar` unit tests |
+| tests/test_strip_threshold.py | create | ~110 | strip N-threshold + determinism |
+| tests/test_statistical_wrappers.py | create | ~200 | per-wrapper structural + seaborn-optional |
+| tests/test_catalog.py | create | ~130 | decorator attrs + vocab-raises + demos |
+
+---
+
+## API contracts (concrete signatures)
+
+### `_style.py`
+```python
+def normalize_glyphs(ax: Axes, lw: float) -> None:
+    """Flatten seaborn body/inner-line linewidths to lw; suppress point-collection edges.
+
+    Verbatim behavior of the old violin._normalize_seaborn_glyphs: for every
+    matplotlib.collections.PathCollection set edgecolor 'none'; for every other
+    collection and every Line2D set_linewidth(lw)."""
+
+def style_colorbar(cbar: Colorbar, cfg: Config) -> None:
+    """House-style a colorbar: outline linewidth = cfg.axis_linewidth; tick-label
+    font = Arimo at cfg.colorbar_tick_fontsize; tick marks = cfg.axis_linewidth."""
+```
+- `normalize_glyphs` is a byte-for-byte move of the current violin flattener (same loop).
+- Import `Config` type for the annotation from `...config`; keep `_style.py` seaborn-free
+  (it only touches already-drawn artists) so it is import-safe.
+
+### `_overlay.py`
+```python
+def cap_strip_groups(
+    data: Any,
+    group_keys: list[str],
+    max_points: int | None,
+    seed: int,
+) -> Any:
+    """Return data with each (group_keys) group randomly subsampled to at most
+    max_points rows, using a fixed random_state=seed (deterministic). When
+    max_points is None, return data unchanged (draw every point).
+
+    CLAMP form (plan-critic blocker 1) — never sample more than a group has:
+    `data.groupby(group_keys, group_keys=False).apply(lambda g: g.sample(
+    min(len(g), max_points), random_state=seed))`. Do NOT use
+    `groupby(...).sample(n=max_points)` (raises ValueError when a group is smaller
+    than max_points). Import pandas lazily inside the function so the module stays
+    import-safe without the [stats] extra."""
+```
+- Rationale (put in docstring): the dms_vs_tmo Fig1D rebuild overlaid 236k strip points and
+  visually swamped the violins. Capping points PER GROUP (not total) keeps every category
+  legible and the render deterministic.
+
+### `violin.py` (changed signature)
+```python
+def violin(ax, data, x, y, *, hue=None, palette_name="nucleotide",
+           strip=False, max_strip_points=1000, seed=0, **kw) -> Axes: ...
+```
+- Param count: `ax, data, x, y` positional + keyword-only rest — the ≤4-positional rule is
+  satisfied (keyword-only args don't count against readability here; violin already exceeds
+  4 total and is the sanctioned pattern). Keep them keyword-only as today.
+- When `strip`: build `keys = [x] if (hue is None or hue == x) else [x, hue]` (dedupe when
+  hue==x — plan-critic concern 3), then
+  `strip_df = cap_strip_groups(data, keys, max_strip_points, seed)` and stripplot on `strip_df`.
+- Replace `_normalize_seaborn_glyphs(ax, cfg.axis_linewidth)` with
+  `normalize_glyphs(ax, cfg.axis_linewidth)` (import from `._style`).
+- Default is now `strip=False` (Q2). Existing `make_sample_df` has 40 pts/group < 1000, so
+  the cap is a no-op; the Phase-0 tests call `violin(..., strip=True)` EXPLICITLY, so **no
+  existing test changes** and strip PathCollections are still produced when opted in.
+
+### `box.py`
+```python
+def box(ax, data, x, y, *, hue=None, palette_name="nucleotide",
+        strip=False, max_strip_points=1000, seed=0, **kw) -> Axes: ...
+```
+- `sns.boxplot(ax=, data=, x=, y=, hue=, palette=pal, hue_order=hue_ord, saturation=1,
+  linewidth=cfg.axis_linewidth, **kw)`. Box already shows the distribution, so strip is
+  OFF by default (opt-in); when on, use the SAME `cap_strip_groups` discipline as violin.
+- `normalize_glyphs(ax, cfg.axis_linewidth)` then `finish(ax)`.
+
+### `kde.py`
+```python
+def kde(ax, data, x, *, hue=None, palette_name="nucleotide",
+        fill=True, **kw) -> Axes: ...
+```
+- `sns.kdeplot(ax=, data=, x=, hue=, palette=pal, hue_order=hue_ord, fill=fill,
+  linewidth=cfg.axis_linewidth, **kw)`. No jitter → no RNG dance. Note: `kdeplot` takes no
+  `saturation`; do NOT pass it. `normalize_glyphs` then `finish(ax)`.
+
+### `heatmap2d.py`  (2D histogram via numpy + imshow; RECOMMENDED, see open question Q1)
+```python
+def heatmap2d(ax, x, y, *, bins=50, cmap="magma", colorbar=True, **kw) -> Axes: ...
+```
+- `x, y`: array-likes (or column arrays the caller extracted). Compute
+  `counts, xedges, yedges = np.histogram2d(x, y, bins=bins)`; draw with
+  `ax.imshow(counts.T, origin="lower", extent=[...], aspect="auto", cmap=cmap, **kw)`.
+- If `colorbar`: `cbar = ax.figure.colorbar(im, ax=ax)` then `style_colorbar(cbar, cfg)`.
+- `finish(ax)` last. This capsule needs NO seaborn (numpy+mpl only) — but keep it in
+  `statistical/` and OUT of the top-level `__init__` for taxonomy consistency. (If Q1 is
+  resolved toward seaborn, switch the body to `sns.histplot(ax=, x=, y=, bins=, cbar=,
+  cmap=)` with the lazy-import ImportError guard and style the returned `cbar`.)
+- Keep the public body ≤30 lines by delegating to a private `_hist2d_image(ax, x, y, bins, cmap, **kw)`.
+
+### `hexbin.py`  (native mpl `ax.hexbin`)
+```python
+def hexbin(ax, x, y, *, gridsize=30, cmap="magma", colorbar=True, **kw) -> Axes: ...
+```
+- `hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, **kw)`; if `colorbar`,
+  `style_colorbar(ax.figure.colorbar(hb, ax=ax), cfg)`; `finish(ax)`. No seaborn needed
+  (seaborn has no axes-level hexbin). Same taxonomy note as heatmap2d.
+
+### `_sampledata.py` addition
+```python
+def make_xy_df(seed: int = 42, n: int = 2000) -> pd.DataFrame:
+    """Deterministic bivariate-normal sample: columns x (float), y (float)."""
+```
+
+### `vocab.py`
+```python
+TAGS: frozenset[str] = frozenset({
+    "distribution", "categorical", "density", "comparison",
+    "points", "2d-histogram", "hexbin", "nucleotide", "seaborn",
+})
+DATA_SHAPES: frozenset[str] = frozenset({"long-df", "xy", "matrix"})
+KINDS: frozenset[str] = frozenset({"panel", "figure"})
+
+def validate_tags(tags: Sequence[str]) -> None:  # raises ValueError on unknown token
+def validate_shape(shape: str) -> None:          # raises ValueError on unknown token
+def validate_kind(kind: str) -> None:            # raises ValueError on unknown token
+```
+- Each validator raises `ValueError` naming the offending token AND listing the allowed set
+  (so drift can't start silently). Module docstring states the governance rule: **an agent
+  adding a new token appends it to `vocab.py` (with a one-line justification) in the same change.**
+
+### `catalog.py`
+```python
+def catalog(*, tags: Sequence[str], data_shape: str, kind: str = "panel") -> Callable:
+    """Attach a validated __yp_catalog__ metadata dict to a plot function.
+
+    ONLY attaches attributes; there is NO global registry, collector, gallery, or
+    catalog.json (all deferred to Phase 3). Validates tags/data_shape/kind against
+    yplot2.vocab and raises ValueError on any unknown token."""
+```
+- The decorator calls the three `vocab` validators, then sets
+  `fn.__yp_catalog__ = {"tags": tuple(tags), "data_shape": data_shape, "kind": kind,
+  "category": _category_from_module(fn.__module__)}` and returns `fn`.
+- `_category_from_module(module: str) -> str`: split on ".", return the segment immediately
+  after `"plots"` (e.g. `yplot2.plots.statistical.violin` → `"statistical"`); if `"plots"`
+  is absent or last, return `"uncategorized"`. (Name/signature/summary introspection is
+  Phase 3 — do NOT add it here.)
+- Decorate all five wrappers: `@catalog(tags=[...], data_shape="long-df"|"xy", kind="panel")`.
+  Suggested tags — violin: `["distribution","categorical","nucleotide","seaborn"]`;
+  box: `["distribution","categorical","comparison","seaborn"]`;
+  kde: `["density","distribution","seaborn"]`;
+  heatmap2d: `["2d-histogram","density"]`; hexbin: `["hexbin","density"]`.
+- Each wrapper module also defines `demo_<name>() -> matplotlib.figure.Figure` that builds a
+  small `fig, ax = plt.subplots(...)`, calls the wrapper on bundled sample data
+  (`make_sample_df` for violin/box/kde; `make_xy_df` for heatmap2d/hexbin), and returns `fig`.
+- **Where `catalog` is exposed:** import `catalog` into `yplot2/__init__` top-level (it is
+  pure/seaborn-free) as `yp.catalog`, and add to `__all__`. Do NOT import any wrapper module
+  there. (Confirm via Q4 if you'd rather keep it submodule-only.)
+
+---
+
+## Steps (ordered, each independently verifiable)
+
+1. [ ] **`_style.py`** — move the glyph flattener out of violin.py verbatim as
+   `normalize_glyphs`; add `style_colorbar`. Update violin.py to import + call
+   `normalize_glyphs`; delete the private copy; fix BOTH docstring references that name the
+   old symbol — `style.py:1025` AND the self-reference in `violin.py:52` (plan-critic
+   concern 2) — else the grep gate below fails.
+   - Test (`test_shared_statistical_style.py`): a violin drawn through `violin()` still has
+     body/inner-line lw == `cfg.axis_linewidth` and strip edgecolor alpha == 0 (i.e. all
+     `test_phase0_spike.py` glyph asserts still pass); a colorbar passed to `style_colorbar`
+     reports outline lw == `axis_linewidth` and tick label fontname contains "Arimo".
+   - Verify: `grep -r _normalize_seaborn_glyphs yplot2 tests` returns only history/none;
+     ruff complexity ≤10.
+
+2. [ ] **`_overlay.py`** — `cap_strip_groups`.
+   - Test (`test_strip_threshold.py`): a df with one 5000-row group capped at
+     `max_points=1000` returns exactly 1000 rows for that group; `max_points=None` returns
+     all 5000; two calls with the same seed return identical row indices (determinism);
+     different seeds differ.
+
+3. [ ] **violin.py strip cap** — add `max_strip_points=1000`; route the strip overlay df
+   through `cap_strip_groups`.
+   - Test: build a synthetic df (5000 pts in group "A") via a local fixture, call
+     `violin(..., strip=True, max_strip_points=1000)`, assert the strip PathCollection total
+     offsets ≤ n_groups × 1000; assert `max_strip_points=None` draws all points; assert
+     seed determinism of the overlay. **Existing `test_phase0_spike.py` unchanged and green.**
+
+4. [ ] **vocab.py** then **catalog.py** — vocabulary + decorator.
+   - Test (`test_catalog.py`): `@catalog(tags=["distribution"], data_shape="long-df")` on a
+     dummy fn sets `__yp_catalog__` with the right tags/shape/kind and
+     `category` derived from `__module__`; `catalog(tags=["nope"], ...)` raises `ValueError`;
+     unknown `data_shape` raises; unknown `kind` raises; `_category_from_module` maps a
+     `yplot2.plots.statistical.x` module to `"statistical"`.
+   - Verify: no module-level mutable registry exists (grep for a global dict/list being
+     appended in catalog.py — there must be none).
+
+5. [ ] **Decorate violin + write `demo_violin`**; add `make_xy_df` to `_sampledata.py`.
+   - Test: `violin.__yp_catalog__["category"] == "statistical"`; `demo_violin()` returns a
+     `matplotlib.figure.Figure` with ≥1 axes; close the fig.
+
+6. [ ] **box.py** (+ strip discipline) + `@catalog` + `demo_box`.
+   - Test (`test_statistical_wrappers.py`): box bodies carry exact house palette hex
+     (`palette_hex("nucleotide", n)` for each nuc) — proves `saturation=1` + palette dict;
+     spine lw == `axis_linewidth`, tick label font contains "Arimo" (house style on seaborn
+     artists); `strip=True` overlay respects `max_strip_points`; `__yp_catalog__` present.
+
+7. [ ] **kde.py** + `@catalog` + `demo_kde`.
+   - Test: kde line lw == `axis_linewidth`; tick font "Arimo"; hue path uses the registry
+     `hue_order`; `demo_kde()` returns a Figure.
+
+8. [ ] **heatmap2d.py** + `@catalog` + `demo_heatmap2d` (resolve Q1 first; default = numpy+imshow).
+   - Test: an AxesImage is present; when `colorbar=True` a colorbar exists with outline
+     lw == `axis_linewidth` and tick font "Arimo" (house-styled colorbar); spine/tick house
+     style applied; `demo_heatmap2d()` returns a Figure.
+
+9. [ ] **hexbin.py** + `@catalog` + `demo_hexbin`.
+   - Test: a `PolyCollection` from `ax.hexbin` is present; colorbar house-styled when on;
+     `demo_hexbin()` returns a Figure.
+
+10. [ ] **seaborn-optional + import-safety** across the suite.
+    - Test: extend the seaborn-absent guard — with `sys.modules["seaborn"]=None`, importing
+      the *modules* still succeeds (imports are lazy) but calling `violin()/box()/kde()`
+      raises `ImportError` whose message contains `pip install 'yplot2[stats]'`.
+      `heatmap2d()/hexbin()` must still WORK with seaborn absent (numpy/mpl only) if Q1 keeps
+      them seaborn-free — assert that. Add a subprocess test asserting `import yplot2` with
+      seaborn blocked still succeeds (mirror `test_no_seaborn_import.py`).
+
+11. [ ] **Wire `catalog` into `yplot2/__init__`** (top-level, `__all__`); confirm NO wrapper
+    module is imported there.
+    - Test: subprocess `import sys; sys.modules['seaborn']=None; import yplot2; yplot2.catalog`
+      prints OK; `"seaborn" not in sys.modules` after `import yplot2`.
+
+---
+
+## Toolchain (MUST pass before handoff back)
+
+```bash
+cd /Users/jyesselman2/local/code/python/developing/yplot2
+ruff check --fix .
+ruff format .
+mypy yplot2/ --ignore-missing-imports        # seaborn/pandas are untyped; data params are Any
+python -m pytest                              # all 103 existing + new tests green
+python -m pytest --cov=yplot2 --cov-report=term-missing   # ≥90% on NEW modules
+# import-safety spot check:
+python -c "import sys; sys.modules['seaborn']=None; import yplot2; assert 'seaborn' not in sys.modules; print('seaborn-free OK')"
+```
+- Coverage threshold is not globally enforced (see pyproject note); still hit ≥90% on the
+  new `_style.py/_overlay.py/box.py/kde.py/heatmap2d.py/hexbin.py/vocab.py/catalog.py`.
+- mypy: annotate `data` as `Any` (as violin does); `x/y` for heatmap2d/hexbin as
+  `Any`/array-like. Type the colorbar as `matplotlib.colorbar.Colorbar`.
+
+---
+
+## Reviewer notes (`py-reviewer`, read-only, audit the diff)
+
+- `normalize_glyphs` must have exactly ONE definition (`_style.py`); violin.py imports it
+  and no longer defines a private flattener; `style.py` docstring no longer names the old symbol.
+- `import yplot2` triggers no seaborn/pandas import (subprocess assertion). No wrapper module
+  is referenced from any `__init__`.
+- `catalog.py` has NO global registry / collector / json / gallery (that's Phase 3). It only
+  attaches `__yp_catalog__` and validates against `vocab`.
+- `vocab` validators raise `ValueError` on unknown tokens and name the allowed set.
+- Determinism preserved: strip subsample + violin jitter both seeded; global `np.random`
+  state restored around seaborn draws.
+- Palette correctness: box/violin bodies carry undiluted `palette_hex(...)` (proves
+  `saturation=1` + explicit palette dict + `hue_order` path).
+- No existing plot files moved; `basic/regression/pop_avg/lollipop` untouched.
+- All 103 prior tests still pass unmodified.
+
+---
+
+## Open design questions — RESOLVED (see the authoritative "Design resolutions (Q1–Q5)"
+## block at the top of this plan; that block governs. Original notes retained below for
+## context only — where they conflict with the top block, the top block WINS.)
+
+- **Q1 — heatmap2d backend.** RESOLVED: numpy `histogram2d` + `imshow` + styled colorbar;
+  `hexbin` = native `ax.hexbin`. Both seaborn-FREE. Only violin/box/kde carry the guard.
+- **Q2 — strip large-N policy.** RESOLVED: strip OPT-IN, default `strip=False` on violin AND
+  box; when on, seeded per-group CLAMP subsample at `max_strip_points=1000`. No Phase-0 test
+  edit needed.
+- **Q3 — normalizer.** RESOLVED: `plots/statistical/_style.py::normalize_glyphs`.
+- **Q4 — demos & catalog.** RESOLVED: reuse `make_sample_df` + add `make_xy_df`; demos as
+  bare `plt.subplots` panels; `yp.catalog` top-level; demos NOT import-time reachable.
+- **Q5 — box strip default.** RESOLVED: BOTH `box(strip=False)` AND `violin(strip=False)` —
+  strip is opt-in everywhere; there is NO asymmetry (the earlier `violin(strip=True)` idea
+  was dropped in Q2). Points are opt-in on both.
+
+> **pandas note (plan-critic concern):** the clamp `groupby(...).apply(...)` idiom emits a
+> `FutureWarning` on pandas 2.3.3 but is not test-breaking (no `filterwarnings=error`). Do
+> NOT silence it with `include_groups=False` — that drops the `x`/`hue` grouping columns
+> `stripplot` needs. Leave the idiom as written (columns/index are preserved correctly).
+

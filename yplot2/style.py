@@ -1022,7 +1022,7 @@ def finish(ax: Axes) -> None:
 
     For seaborn violin glyphs (violin bodies, inner box/whisker/median, strip
     dots) use ``violin()`` from yplot2.plots.statistical.violin, which calls
-    ``_normalize_seaborn_glyphs(ax)`` before ``finish(ax)``.
+    ``normalize_glyphs(ax)`` before ``finish(ax)``.
 
     Idempotent: calling finish() twice yields identical artist properties.
 
