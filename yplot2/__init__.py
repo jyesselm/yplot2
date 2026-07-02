@@ -137,6 +137,9 @@ from .style import (
 # Catalog decorator (pure — no seaborn/pandas)
 from .catalog import catalog
 
+# Provenance-stamping save (pure — no heavy deps at import)
+from .save import save
+
 # Canvas: GridSpec7, figure(), figure7()
 from .canvas import GridSpec7, figure, figure7
 
@@ -291,6 +294,8 @@ __all__ = [
     "house_palette_colors",
     # Catalog decorator
     "catalog",
+    # Provenance-stamping save
+    "save",
     # Canvas
     "GridSpec7",
     "figure",

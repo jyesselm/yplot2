@@ -20,6 +20,7 @@ dev = [
     "fonttools>=4.0",
 ]
 stats = ["seaborn>=0.13,<0.14"]
+repro = ["nbconvert>=7", "ipykernel>=6"]
 
 [tool.pytest.ini_options]
 # Phase 0: coverage measured but threshold not enforced on legacy uncovered modules.
@@ -53,6 +54,9 @@ omit = [
     "yplot2/plots/pop_avg.py",
     "yplot2/plots/basic.py",
 ]
+
+[tool.setuptools.packages.find]
+include = ["yplot2*"]
 
 [tool.setuptools.package-data]
 yplot2 = ["fonts/*.ttf", "fonts/LICENSE.txt"]

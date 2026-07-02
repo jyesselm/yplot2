@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "capsules": [
+    {
+      "name": "box",
+      "category": "statistical",
+      "tags": [
+        "distribution",
+        "categorical",
+        "comparison",
+        "seaborn"
+      ],
+      "data_shape": "long-df",
+      "kind": "panel",
+      "signature": "(ax: matplotlib.axes._axes.Axes, data: Any, x: str, y: str, *, hue: Optional[str] = None, palette_name: str = 'nucleotide', strip: bool = False, max_strip_points: int = 1000, seed: int = 0, **kw: Any) -> matplotlib.axes._axes.Axes",
+      "inputs": [
+        "data",
+        "x",
+        "y",
+        "hue",
+        "palette_name",
+        "strip",
+        "max_strip_points",
+        "seed",
+        "kw"
+      ],
+      "summary": "Draw a house-styled box plot on *ax*.",
+      "source_path": "plots/statistical/box.py",
+      "import_path": "yplot2.plots.statistical.box.box",
+      "has_demo": true
+    },
+    {
+      "name": "heatmap2d",
+      "category": "statistical",
+      "tags": [
+        "2d-histogram",
+        "density"
+      ],
+      "data_shape": "xy",
+      "kind": "panel",
+      "signature": "(ax: matplotlib.axes._axes.Axes, x: Any, y: Any, *, bins: int = 50, cmap: str = 'magma', colorbar: bool = True, **kw: Any) -> matplotlib.axes._axes.Axes",
+      "inputs": [
+        "x",
+        "y",
+        "bins",
+        "cmap",
+        "colorbar",
+        "kw"
+      ],
+      "summary": "Draw a 2-D histogram heatmap on *ax* using numpy + imshow.",
+      "source_path": "plots/statistical/heatmap2d.py",
+      "import_path": "yplot2.plots.statistical.heatmap2d.heatmap2d",
+      "has_demo": true
+    },
+    {
+      "name": "hexbin",
+      "category": "statistical",
+      "tags": [
+        "hexbin",
+        "density"
+      ],
+      "data_shape": "xy",
+      "kind": "panel",
+      "signature": "(ax: matplotlib.axes._axes.Axes, x: Any, y: Any, *, gridsize: int = 30, cmap: str = 'magma', colorbar: bool = True, **kw: Any) -> matplotlib.axes._axes.Axes",
+      "inputs": [
+        "x",
+        "y",
+        "gridsize",
+        "cmap",
+        "colorbar",
+        "kw"
+      ],
+      "summary": "Draw a hexagonal-bin density plot on *ax* using native matplotlib hexbin.",
+      "source_path": "plots/statistical/hexbin.py",
+      "import_path": "yplot2.plots.statistical.hexbin.hexbin",
+      "has_demo": true
+    },
+    {
+      "name": "kde",
+      "category": "statistical",
+      "tags": [
+        "density",
+        "distribution",
+        "seaborn"
+      ],
+      "data_shape": "long-df",
+      "kind": "panel",
+      "signature": "(ax: matplotlib.axes._axes.Axes, data: Any, x: str, *, hue: Optional[str] = None, palette_name: str = 'nucleotide', fill: bool = True, **kw: Any) -> matplotlib.axes._axes.Axes",
+      "inputs": [
+        "data",
+        "x",
+        "hue",
+        "palette_name",
+        "fill",
+        "kw"
+      ],
+      "summary": "Draw a house-styled kernel density estimate on *ax*.",
+      "source_path": "plots/statistical/kde.py",
+      "import_path": "yplot2.plots.statistical.kde.kde",
+      "has_demo": true
+    },
+    {
+      "name": "violin",
+      "category": "statistical",
+      "tags": [
+        "distribution",
+        "categorical",
+        "nucleotide",
+        "seaborn"
+      ],
+      "data_shape": "long-df",
+      "kind": "panel",
+      "signature": "(ax: matplotlib.axes._axes.Axes, data: Any, x: str, y: str, *, hue: Optional[str] = None, palette_name: str = 'nucleotide', strip: bool = False, max_strip_points: int = 1000, seed: int = 0, **kw: Any) -> matplotlib.axes._axes.Axes",
+      "inputs": [
+        "data",
+        "x",
+        "y",
+        "hue",
+        "palette_name",
+        "strip",
+        "max_strip_points",
+        "seed",
+        "kw"
+      ],
+      "summary": "Draw a house-styled violin plot on *ax*.",
+      "source_path": "plots/statistical/violin.py",
+      "import_path": "yplot2.plots.statistical.violin.violin",
+      "has_demo": true
+    }
+  ]
+}

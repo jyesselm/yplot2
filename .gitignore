@@ -39,3 +39,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Catalog gallery thumbnails (regenerable via python -m yplot2.catalog_build.build)
+catalog/thumbs/
