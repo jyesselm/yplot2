@@ -134,6 +134,12 @@ from .style import (
     set_background_all,
 )
 
+# Canvas: GridSpec7, figure(), figure7()
+from .canvas import GridSpec7, figure, figure7
+
+# Composite annotation helpers
+from .composite import annotate, line_annotation, distance_label
+
 # Plot functions (use global config)
 from .plots import (
     # Basic plots
@@ -280,4 +286,12 @@ __all__ = [
     "palette",
     "palette_hex",
     "house_palette_colors",
+    # Canvas
+    "GridSpec7",
+    "figure",
+    "figure7",
+    # Composite helpers
+    "annotate",
+    "line_annotation",
+    "distance_label",
 ]

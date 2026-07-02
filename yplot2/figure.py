@@ -42,36 +42,59 @@ def coord_from_image(
     image_path: str,
     left: float,
     bottom: float,
-    dpi: float = 300,
+    *,
+    column_width: Optional[float] = None,
     scale: float = 1.0,
+    dpi: float = 300,
 ) -> Coord:
-    """
-    Create a Coord matching an image's exact dimensions.
+    """Panel sized from the image's true aspect ratio.
+
+    Height is ALWAYS ``width / image_aspect`` so the panel can never distort
+    an image loaded via ``load_image()``.
+
+    BEHAVIOR CHANGE (Phase 1): when ``column_width`` is given, ``scale``
+    changes meaning from a raw native-size multiplier to a *fraction of
+    column_width*.  Callers that pass only ``left`` / ``bottom`` (no
+    ``column_width``) get the original native-size-× behavior unchanged.
+
+    - If column_width given: ``width = column_width * scale``;
+      ``height = width / image_aspect``.
+      (``scale`` is a fraction of a column width, e.g. 0.5 = half-column.)
+    - If column_width is None (back-compat): ``width = native_inches * scale``;
+      ``height = width / image_aspect``  (aspect always preserved).
+
+    image_aspect = pixel_width / pixel_height, derived from get_image_size().
 
     Args:
-        image_path: Path to image file
-        left: Left position in inches
-        bottom: Bottom position in inches
-        dpi: DPI to use for pixel-to-inch conversion (default: 300)
-        scale: Scale factor for the image size (default: 1.0)
+        image_path: Path to image file.
+        left: Left position in inches.
+        bottom: Bottom position in inches.
+        column_width: Reference column width in inches.  When given, ``scale``
+            is a fraction of this value.  When None, ``scale`` applies to the
+            native pixel-to-inch size (back-compat).
+        scale: Fraction of ``column_width`` (if given) or native-size multiplier
+            (if column_width is None).  Default 1.0.
+        dpi: DPI for pixel-to-inch conversion (default 300).
 
     Returns:
-        Coord with dimensions matching the image
+        Coord with width and height preserving the image aspect ratio.
 
-    Example:
-        # Create panel exactly matching image size
-        a = yp.coord_from_image("structure.png", left=0.5, bottom=3.0)
+    Example::
 
-        # Scale to 50% of original size
-        b = yp.coord_from_image("structure.png", left=0.5, bottom=1.0, scale=0.5)
+        # Column-fraction sizing (new behavior)
+        a = yp.coord_from_image("structure.png", 0.5, 3.0, column_width=3.0)
+
+        # Back-compat: native size at scale 0.5
+        b = yp.coord_from_image("structure.png", 0.5, 1.0, scale=0.5)
     """
-    width, height = get_image_size(image_path, dpi=dpi)
-    return Coord(
-        left=left,
-        bottom=bottom,
-        width=width * scale,
-        height=height * scale,
-    )
+    if scale <= 0:
+        raise ValueError(f"scale must be positive, got {scale!r}")
+    if column_width is not None and column_width <= 0:
+        raise ValueError(f"column_width must be positive, got {column_width!r}")
+    native_w, native_h = get_image_size(image_path, dpi=dpi)
+    aspect = native_w / native_h
+    width = (column_width * scale) if column_width is not None else (native_w * scale)
+    return Coord(left=left, bottom=bottom, width=width, height=width / aspect)
 
 
 def create_figure(
@@ -218,7 +241,7 @@ def load_image(
         if aspect_diff > distortion_threshold:
             warnings.warn(
                 f"Image aspect ratio ({image_aspect:.3f}) differs from panel "
-                f"aspect ratio ({panel_aspect:.3f}) by {aspect_diff*100:.1f}%. "
+                f"aspect ratio ({panel_aspect:.3f}) by {aspect_diff * 100:.1f}%. "
                 f"Image will be stretched. Use coord_from_image() to create a "
                 f"panel matching the image dimensions.",
                 UserWarning,
@@ -227,10 +250,10 @@ def load_image(
 
     ax.clear()
     # aspect='auto' stretches image to fill the axes completely
-    ax.imshow(img, aspect='auto')
+    ax.imshow(img, aspect="auto")
 
     # Remove all axes decorations
-    ax.axis('off')
+    ax.axis("off")
 
 
 def make_image_panel(ax: Axes) -> None:
@@ -242,7 +265,7 @@ def make_image_panel(ax: Axes) -> None:
     Args:
         ax: Axes object to prepare
     """
-    ax.axis('off')
+    ax.axis("off")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
@@ -298,7 +321,9 @@ def add_labels(
         y = (coord.top + dy) / fig_height
 
         fig.text(
-            x, y, letter,
+            x,
+            y,
+            letter,
             fontsize=fontsize,
             fontweight=fontweight,
             fontname=fontname,
@@ -325,9 +350,13 @@ def draw_debug_boxes(
         colors: List of colors to use (cycles if fewer than coords)
     """
     if colors is None:
-        colors = plt.rcParams["axes.prop_cycle"].by_key().get(
-            "color",
-            ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]
+        colors = (
+            plt.rcParams["axes.prop_cycle"]
+            .by_key()
+            .get(
+                "color",
+                ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray"],
+            )
         )
 
     fig_width, fig_height = fig_size
@@ -366,7 +395,9 @@ def draw_figure_border(
         yp.draw_figure_border(fig, linewidth=2, color="gray")
     """
     rect = patches.Rectangle(
-        (0, 0), 1, 1,
+        (0, 0),
+        1,
+        1,
         linewidth=linewidth,
         edgecolor=color,
         facecolor="none",

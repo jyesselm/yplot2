@@ -5,14 +5,16 @@ All functions use global config defaults when parameters aren't specified.
 Any parameter can be overridden per-panel.
 """
 
+import dataclasses
 from contextlib import contextmanager
-from typing import Generator, Optional, List, Tuple, Union
+from typing import Generator, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.font_manager as fm
 from matplotlib.axes import Axes
+from matplotlib.text import Text
 
-from .config import get_config
+from .config import Config, get_config
 
 
 def _should_preserve_font(current_font: str, preserve_list: Tuple[str, ...]) -> bool:
@@ -74,6 +76,211 @@ def _resolve_font_family(font_family: Union[str, Tuple[str, ...]]) -> str:
     return font_family[0] if font_family else "Arimo"
 
 
+def _set_fontname_if_needed(
+    label: Text,
+    font_family: str,
+    *,
+    check_preserve: bool,
+    preserve_fonts: Tuple[str, ...],
+) -> None:
+    """Set fontname on a tick label unless the preserve-check blocks it.
+
+    Args:
+        label: Tick label Text object to modify.
+        font_family: Target font family name.
+        check_preserve: When True, skip labels whose current font is in preserve_fonts.
+            When False (finish path), overwrite unconditionally — matching current finish
+            behavior which ignores preserve_font_families on tick labels.
+        preserve_fonts: Fonts that should not be overwritten when check_preserve is True.
+    """
+    if check_preserve and _should_preserve_font(label.get_fontname(), preserve_fonts):
+        return
+    label.set_fontname(font_family)
+
+
+def _apply_tick_fonts(
+    labels: List[Text],
+    font_family: str,
+    fontsize: float,
+    *,
+    apply_fonts: bool,
+    apply_fontsizes: bool,
+    check_preserve: bool,
+    preserve_fonts: Tuple[str, ...],
+) -> None:
+    """Apply font family and size to a list of tick label Text objects.
+
+    Args:
+        labels: Tick label Text objects (from ax.get_xticklabels() / get_yticklabels()).
+        font_family: Target font family name (already resolved).
+        fontsize: Target font size in points.
+        apply_fonts: Whether to change the font family at all.
+        apply_fontsizes: Whether to change the font size.
+        check_preserve: Passed through to _set_fontname_if_needed.
+        preserve_fonts: Fonts to skip when check_preserve is True.
+    """
+    for label in labels:
+        if apply_fonts:
+            _set_fontname_if_needed(
+                label,
+                font_family,
+                check_preserve=check_preserve,
+                preserve_fonts=preserve_fonts,
+            )
+        if apply_fontsizes:
+            label.set_fontsize(fontsize)
+
+
+def _enforce_spines_ticks(
+    ax: Axes,
+    cfg: Config,
+    *,
+    set_tick_direction: bool,
+) -> None:
+    """Set spine linewidths and tick mark parameters from cfg.
+
+    Args:
+        ax: Target axes.
+        cfg: Config instance whose numeric chrome values are applied.
+        set_tick_direction: When True, also applies cfg.axis_tick_direction.
+            apply_style sets this True; finish sets it False to leave direction alone.
+    """
+    for spine in ax.spines.values():
+        spine.set_linewidth(cfg.axis_linewidth)
+    tick_x: dict = {
+        "width": cfg.axis_tick_width,
+        "length": cfg.axis_tick_length,
+        "pad": cfg.x_axis_tick_pad,
+    }
+    tick_y: dict = {
+        "width": cfg.axis_tick_width,
+        "length": cfg.axis_tick_length,
+        "pad": cfg.y_axis_tick_pad,
+    }
+    if set_tick_direction:
+        tick_x["direction"] = cfg.axis_tick_direction
+        tick_y["direction"] = cfg.axis_tick_direction
+    ax.tick_params(axis="x", **tick_x)
+    ax.tick_params(axis="y", **tick_y)
+
+
+def _enforce_text_fonts(
+    ax: Axes,
+    cfg: Config,
+    font_family: str,
+    *,
+    set_label_fontsizes: bool,
+    set_label_pads: bool,
+    set_title_fontsize: bool,
+    check_preserve_on_ticks: bool,
+    apply_fonts: bool,
+    apply_fontsizes: bool,
+    preserve_fonts: Tuple[str, ...],
+) -> None:
+    """Set axis-label, title, and tick-label fonts and sizes from cfg.
+
+    Args:
+        ax: Target axes.
+        cfg: Config instance whose numeric values are applied.
+        font_family: Resolved font family name.
+        set_label_fontsizes: Apply x/y axis-label fontsizes (apply_style path only).
+        set_label_pads: Apply x/y labelpad values (apply_style path only).
+        set_title_fontsize: Apply title fontsize (apply_style path only).
+        check_preserve_on_ticks: apply_style honors preserve_fonts on tick labels;
+            finish ignores it (overwrites unconditionally — current behavior pinned).
+        apply_fonts: Whether to change font families at all.
+        apply_fontsizes: Whether to change tick-label fontsizes.
+        preserve_fonts: Fonts to leave unchanged on axis labels and title.
+    """
+    if set_label_fontsizes:
+        ax.xaxis.label.set_fontsize(cfg.x_axis_label_fontsize)
+        ax.yaxis.label.set_fontsize(cfg.y_axis_label_fontsize)
+    if apply_fonts:
+        if not _should_preserve_font(ax.xaxis.label.get_fontname(), preserve_fonts):
+            ax.xaxis.label.set_fontname(font_family)
+        if not _should_preserve_font(ax.yaxis.label.get_fontname(), preserve_fonts):
+            ax.yaxis.label.set_fontname(font_family)
+    if set_label_pads:
+        ax.xaxis.labelpad = cfg.x_axis_label_pad
+        ax.yaxis.labelpad = cfg.y_axis_label_pad
+    if set_title_fontsize:
+        ax.title.set_fontsize(cfg.axis_title_fontsize)
+    if apply_fonts and not _should_preserve_font(
+        ax.title.get_fontname(), preserve_fonts
+    ):
+        ax.title.set_fontname(font_family)
+    _apply_tick_fonts(
+        ax.get_xticklabels(),
+        font_family,
+        cfg.x_axis_tick_fontsize,
+        apply_fonts=apply_fonts,
+        apply_fontsizes=apply_fontsizes,
+        check_preserve=check_preserve_on_ticks,
+        preserve_fonts=preserve_fonts,
+    )
+    _apply_tick_fonts(
+        ax.get_yticklabels(),
+        font_family,
+        cfg.y_axis_tick_fontsize,
+        apply_fonts=apply_fonts,
+        apply_fontsizes=apply_fontsizes,
+        check_preserve=check_preserve_on_ticks,
+        preserve_fonts=preserve_fonts,
+    )
+
+
+def _enforce_chrome(
+    ax: Axes,
+    cfg: Config,
+    font_family: str,
+    *,
+    set_label_fontsizes: bool,
+    set_label_pads: bool,
+    set_tick_direction: bool,
+    set_title_fontsize: bool,
+    check_preserve_on_ticks: bool,
+    apply_fonts: bool,
+    apply_fontsizes: bool,
+    preserve_fonts: Tuple[str, ...],
+) -> None:
+    """Single chrome enforcer: spines, ticks, tick-label and axis-label fonts/sizes.
+
+    Reads all numeric chrome values from the cfg it is passed.  Both apply_style
+    and finish delegate here; the flag matrix reproduces each caller's exact current
+    behavior without duplicating rendering logic.
+
+    Args:
+        ax: Target axes.
+        cfg: Config instance to read chrome values from.  apply_style passes a
+            per-call copy with overrides folded in via dataclasses.replace; finish
+            passes the global cfg unchanged.
+        font_family: Resolved font family (already run through _resolve_font_family).
+        set_label_fontsizes: Apply x/y axis-label fontsizes.
+        set_label_pads: Apply x/y labelpad values.
+        set_tick_direction: Apply tick direction from cfg.
+        set_title_fontsize: Apply title fontsize.
+        check_preserve_on_ticks: Honor preserve_fonts on tick labels (apply_style=True,
+            finish=False — intentional divergence, see BLOCKER-1 in Phase 1 plan).
+        apply_fonts: Whether to change font families.
+        apply_fontsizes: Whether to change font sizes (tick labels and optionally labels).
+        preserve_fonts: Fonts to leave unchanged (axis labels + title always checked;
+            tick labels checked only when check_preserve_on_ticks=True).
+    """
+    _enforce_spines_ticks(ax, cfg, set_tick_direction=set_tick_direction)
+    _enforce_text_fonts(
+        ax,
+        cfg,
+        font_family,
+        set_label_fontsizes=set_label_fontsizes,
+        set_label_pads=set_label_pads,
+        set_title_fontsize=set_title_fontsize,
+        check_preserve_on_ticks=check_preserve_on_ticks,
+        apply_fonts=apply_fonts,
+        apply_fontsizes=apply_fontsizes,
+        preserve_fonts=preserve_fonts,
+    )
+
+
 def apply_style(
     ax: Axes,
     # Axis line (spine) settings
@@ -96,7 +303,6 @@ def apply_style(
     y_axis_label_pad: Optional[float] = None,
     # Title settings
     axis_title_fontsize: Optional[float] = None,
-    axis_title_pad: Optional[float] = None,
     # Font settings
     font_family: Optional[Union[str, Tuple[str, ...]]] = None,
     apply_fonts: Optional[bool] = None,
@@ -124,7 +330,6 @@ def apply_style(
         y_axis_label_fontsize: Y-axis label font size
         y_axis_label_pad: Y-axis label padding
         axis_title_fontsize: Title font size
-        axis_title_pad: Title padding
         font_family: Font family for all text. Can be a string or tuple of
             fonts to try in order (fallback chain).
         apply_fonts: Whether to apply font family changes (default: True).
@@ -208,9 +413,6 @@ def apply_style(
         if axis_title_fontsize is not None
         else cfg.axis_title_fontsize
     )
-    axis_title_pad = (
-        axis_title_pad if axis_title_pad is not None else cfg.axis_title_pad
-    )
 
     # Font settings
     font_family_raw = font_family if font_family is not None else cfg.font_family
@@ -225,62 +427,37 @@ def apply_style(
         apply_fontsizes if apply_fontsizes is not None else cfg.apply_fontsizes
     )
 
-    # Set spine line widths
-    for spine in ax.spines.values():
-        spine.set_linewidth(axis_linewidth)
-
-    # Set tick parameters separately for x and y
-    ax.tick_params(
-        axis="x",
-        width=axis_tick_width,
-        length=axis_tick_length,
-        pad=x_axis_tick_pad,
-        direction=axis_tick_direction,
+    # Fold all resolved overrides into a per-call Config so _enforce_chrome reads them.
+    # Do NOT pass the global cfg here — that would silently drop per-call overrides.
+    local_cfg = dataclasses.replace(
+        cfg,
+        axis_linewidth=axis_linewidth,
+        axis_tick_width=axis_tick_width,
+        axis_tick_length=axis_tick_length,
+        axis_tick_direction=axis_tick_direction,
+        x_axis_tick_pad=x_axis_tick_pad,
+        y_axis_tick_pad=y_axis_tick_pad,
+        x_axis_tick_fontsize=x_axis_tick_fontsize,
+        y_axis_tick_fontsize=y_axis_tick_fontsize,
+        x_axis_label_fontsize=x_axis_label_fontsize,
+        y_axis_label_fontsize=y_axis_label_fontsize,
+        x_axis_label_pad=x_axis_label_pad,
+        y_axis_label_pad=y_axis_label_pad,
+        axis_title_fontsize=axis_title_fontsize,
     )
-    ax.tick_params(
-        axis="y",
-        width=axis_tick_width,
-        length=axis_tick_length,
-        pad=y_axis_tick_pad,
-        direction=axis_tick_direction,
+    _enforce_chrome(
+        ax,
+        local_cfg,
+        font_family,
+        set_label_fontsizes=apply_fontsizes,
+        set_label_pads=True,
+        set_tick_direction=True,
+        set_title_fontsize=apply_fontsizes,
+        check_preserve_on_ticks=True,
+        apply_fonts=apply_fonts,
+        apply_fontsizes=apply_fontsizes,
+        preserve_fonts=preserve_fonts,
     )
-
-    # Set axis label properties
-    if apply_fontsizes:
-        ax.xaxis.label.set_fontsize(x_axis_label_fontsize)
-        ax.yaxis.label.set_fontsize(y_axis_label_fontsize)
-    if apply_fonts:
-        if not _should_preserve_font(ax.xaxis.label.get_fontname(), preserve_fonts):
-            ax.xaxis.label.set_fontname(font_family)
-        if not _should_preserve_font(ax.yaxis.label.get_fontname(), preserve_fonts):
-            ax.yaxis.label.set_fontname(font_family)
-    ax.xaxis.labelpad = x_axis_label_pad
-    ax.yaxis.labelpad = y_axis_label_pad
-
-    # Set title properties
-    if apply_fontsizes:
-        ax.title.set_fontsize(axis_title_fontsize)
-    if apply_fonts and not _should_preserve_font(
-        ax.title.get_fontname(), preserve_fonts
-    ):
-        ax.title.set_fontname(font_family)
-
-    # Set tick label fonts
-    for label in ax.get_xticklabels():
-        if apply_fonts and not _should_preserve_font(
-            label.get_fontname(), preserve_fonts
-        ):
-            label.set_fontname(font_family)
-        if apply_fontsizes:
-            label.set_fontsize(x_axis_tick_fontsize)
-
-    for label in ax.get_yticklabels():
-        if apply_fonts and not _should_preserve_font(
-            label.get_fontname(), preserve_fonts
-        ):
-            label.set_fontname(font_family)
-        if apply_fontsizes:
-            label.set_fontsize(y_axis_tick_fontsize)
 
 
 def apply_style_to_all(
@@ -853,44 +1030,27 @@ def finish(ax: Axes) -> None:
         ax: Axes object to finalize.
     """
     cfg = get_config()
-    lw = cfg.axis_linewidth
     font_family = _resolve_font_family(cfg.font_family)
-
-    # Spines
-    for spine in ax.spines.values():
-        spine.set_linewidth(lw)
-
-    # Ticks (x and y separately to preserve per-axis pad config)
-    ax.tick_params(
-        axis="x",
-        width=cfg.axis_tick_width,
-        length=cfg.axis_tick_length,
-        pad=cfg.x_axis_tick_pad,
+    # finish passes the global cfg unchanged (no per-call overrides).
+    # Flag matrix reproduces current finish behavior exactly:
+    #   set_label_fontsizes=False  — finish never sets axis-label fontsizes
+    #   set_label_pads=False       — finish never sets labelpads
+    #   set_tick_direction=False   — finish never sets tick direction
+    #   set_title_fontsize=False   — finish never sets title fontsize
+    #   check_preserve_on_ticks=False — finish overwrites tick-label fonts unconditionally
+    _enforce_chrome(
+        ax,
+        cfg,
+        font_family,
+        set_label_fontsizes=False,
+        set_label_pads=False,
+        set_tick_direction=False,
+        set_title_fontsize=False,
+        check_preserve_on_ticks=False,
+        apply_fonts=True,
+        apply_fontsizes=True,
+        preserve_fonts=cfg.preserve_font_families,
     )
-    ax.tick_params(
-        axis="y",
-        width=cfg.axis_tick_width,
-        length=cfg.axis_tick_length,
-        pad=cfg.y_axis_tick_pad,
-    )
-
-    # Tick-label fonts and sizes
-    for label in ax.get_xticklabels():
-        label.set_fontname(font_family)
-        label.set_fontsize(cfg.x_axis_tick_fontsize)
-    for label in ax.get_yticklabels():
-        label.set_fontname(font_family)
-        label.set_fontsize(cfg.y_axis_tick_fontsize)
-
-    # Axis-label fonts (sizes preserved — caller used set_xlabel/ylabel with explicit size)
-    if not _should_preserve_font(ax.xaxis.label.get_fontname(), cfg.preserve_font_families):
-        ax.xaxis.label.set_fontname(font_family)
-    if not _should_preserve_font(ax.yaxis.label.get_fontname(), cfg.preserve_font_families):
-        ax.yaxis.label.set_fontname(font_family)
-
-    # Title font
-    if not _should_preserve_font(ax.title.get_fontname(), cfg.preserve_font_families):
-        ax.title.set_fontname(font_family)
 
 
 def use_style() -> None:
