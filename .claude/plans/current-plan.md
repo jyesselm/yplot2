@@ -1,609 +1,359 @@
-# yplot2 Phase 3 — Reproducibility spine + catalog BUILD tooling
+# Phase 4 Plan — "anti-fork lint" (`python -m yplot2.lint`)
 
-> Handoff for `py-coder`. Self-contained; you do NOT see the planning conversation.
-> Follow `~/.claude/standards/python-style.md`: functions ≤30 lines / complexity ≤10,
-> ≤4 positional params (group extras into keyword-only or a dataclass), full type hints +
-> Args/Returns/Raises docstrings, modules 200–300 lines, `ruff check`/`ruff format`/`mypy`
-> clean, `pytest` with ≥90% coverage on NEW code.
-
----
-
-## Design resolutions (Q1–Q7 — AUTHORITATIVE; override conflicting task text below)
-
-- **Q1 PDF determinism:** `save()` sets `metadata={"CreationDate": None}` to suppress the
-  wall-clock timestamp; do NOT stamp a fake fixed epoch. Document that strict byte-identical
-  PDFs need `SOURCE_DATE_EPOCH` (mpl honors it). Determinism is best-effort; provenance is
-  the goal.
-- **Q2 source path:** store the caller-passed `source` VERBATIM in metadata; recommend
-  (in docs) passing a repo-relative path. Do NOT force `os.path.relpath`. The best-effort
-  git SHA is the real provenance anchor.
-- **Q3 output location:** `catalog.json` + `CATALOG.md` + `thumbs/` live in a `catalog/`
-  dir at the REPO ROOT (CLI `--out-dir` default `catalog/`), and are COMMITTED (agent- and
-  human-readable). DEFER the "commit catalog.json into yplot2/ + `__init__` reads it"
-  namespace idea to Phase 4.
-- **Q4 notebook tool:** `nbconvert` (execute in a clean kernel), behind a new optional
-  `[repro]` extra (`nbconvert`, `ipykernel`) so the base install stays light.
-- **Q5 build CLI:** keep `python -m yplot2.build <dir>` (unit-testable, cross-platform);
-  `figures/build.sh` is a thin wrapper over it.
-- **Q6 missing seaborn in the fingerprint gate:** SKIP demos whose wrapper needs seaborn
-  when seaborn is absent (base suite stays green); the CI `[stats]` job runs the FULL
-  fingerprint gate. `catalog.json` static collection stays seaborn-free regardless.
-- **Q7 curation:** `differentiator=` dup-lint + active/deprecated `status` are Phase 4 —
-  OUT of Phase 3.
-- **Fingerprint correctness (CORRECTED — plan-critic verified my earlier claim was wrong):**
-  heatmap2d/hexbin MAIN panels ARE fully ticked and house-styled (Arimo/6 ticks, 0.75
-  visible spines) — do NOT skip them. The correct mechanism (already in the plan body) is
-  PER-ARTIST existence, not axis-type skipping: (a) assert `get_linewidth()==axis_linewidth`
-  only on VISIBLE spines — this naturally covers a colorbar's visible `'outline'` spine
-  (0.75) and ignores its invisible default-0.8 frame spines; do NOT hard-restrict the spine
-  loop to `{left,right,bottom,top}` (that would skip the `'outline'` key); (b) assert
-  tick-font/size only on ticks/labels that EXIST. For COLORBAR axes specifically, SKIP the
-  tick-font/size assertion (check only the visible `'outline'` spine lw): `style_colorbar`
-  sets colorbar tick labels to the RAW `cfg.font_family` + `colorbar_tick_fontsize`, whereas
-  `finish` uses `_resolve_font_family(...)` + `x/y_axis_tick_fontsize`; they coincide today
-  only because both are 6 and "Arimo" resolves to itself — asserting them equal would
-  false-fail if a user set `font_family="Arial"`. Do NOT blanket-skip colorbar axes (keep the
-  outline check). Required in the fingerprint acceptance tests.
-
----
-
-## What's already built (do NOT redo)
-
-- Phases 0–2 (last commit `5f98dcc`). Bundled Arimo font registered at import
-  (`yplot2/_fonts.py`); single style engine `apply_style` / `finish` in `yplot2/style.py`;
-  `figure7()` / `GridSpec7` canvas; composite/annotation helpers; palette registry.
-- `yplot2/catalog.py` — `@catalog(tags=, data_shape=, kind=)` decorator that ONLY attaches
-  a validated `fn.__yp_catalog__` dict (`tags`, `data_shape`, `kind`, `category`).
-  `_category_from_module(module)` returns the segment after `"plots"`. There is deliberately
-  NO registry / collector / gallery / json here — that is THIS phase.
-- `yplot2/vocab.py` — controlled `TAGS` / `DATA_SHAPES` / `KINDS` frozensets +
-  `validate_tags/validate_shape/validate_kind` (raise on unknown token).
-- Five statistical capsules in `yplot2/plots/statistical/` (`violin`, `box`, `kde`,
-  `heatmap2d`, `hexbin`). Each carries `@catalog` and a sibling `demo_<name>() -> Figure`
-  that renders from `_sampledata.py` fixtures via a bare `plt.subplots()`. Seaborn is
-  imported LAZILY inside wrapper bodies (`_require_seaborn`), so importing a capsule MODULE
-  is seaborn-free; only RUNNING a demo needs `[stats]`.
-- `Config` (`yplot2/config.py`): `axis_linewidth=0.75`, `axis_tick_width=0.75`,
-  `x_axis_tick_fontsize=6`, `y_axis_tick_fontsize=6`, `font_family="Arimo"`,
-  `colorbar_tick_fontsize=6`. Resolve the house font with
-  `yplot2.style._resolve_font_family(cfg.font_family)` (returns `"Arimo"`).
-- 186 tests green. `import yplot2` is seaborn-free (guarded by
-  `tests/test_no_seaborn_import.py` via `sys.modules['seaborn']=None` in a subprocess).
-- `build/lib/yplot2/**` is an on-disk SHADOW copy (gitignored, untracked). The collector
-  must NEVER discover it.
-
----
+> Supersedes the Phase 3 plan (Phase 3 committed as `6ce53d6`). This is the ONLY
+> remaining code deliverable of Phase 4. The `~/.claude` skill is already written
+> (separate). The compat shim and paper migration are **out of scope** — do not
+> plan or write them.
 
 ## Goal
+Ship a pure-stdlib lint that makes the per-paper `plotting.py` habit fail: it flags
+figure code that reinvents what yplot2 already provides, pointing each finding at the
+yplot2 replacement. Runs as `python -m yplot2.lint <paths...>`; exits nonzero when any
+ERROR-level finding is present, so it can be wired as an optional pre-commit / CI check
+in a paper repo. The #1 design goal is a **low false-positive rate** — a noisy lint gets
+disabled. When in doubt, do NOT flag.
 
-Ship Phase 3's two deliverables without regressing the 186 tests or determinism:
-**(A)** a reproducibility spine — `yp.save()` with provenance stamping + a one-command
-figure-regen convention that also executes notebooks; **(B)** catalog BUILD tooling that
-consumes the Phase-2 `@catalog` seed — a `pkgutil` collector, a STATIC `catalog.json`, a
-BLOCKING artist-property style-fingerprint gate with best-effort thumbnails, and a
-generated `CATALOG.md` gallery — wired into `figures/build.sh` and CI.
+## Design resolutions (Q1–Q5 — AUTHORITATIVE; override conflicting task text below)
 
----
-
-## Hard constraints (restate — a reviewer will check these)
-
-- `import yplot2` MUST stay seaborn-free. `yplot2/save.py`, `yplot2/build.py`, and the
-  collector/records modules MUST be pure at import (NO seaborn / pandas / heavy deps).
-  Only the fingerprint step (which runs demos) may pull seaborn — and only lazily, inside
-  a function body, at build time.
-- Collection walks the package via `pkgutil.walk_packages(yplot2.__path__, prefix=...)` —
-  NEVER a filesystem glob (that would find the `build/lib/yplot2/**` shadow).
-- STATIC `catalog.json` is DECOUPLED from fragile rendering: it is generated from pure
-  static introspection and is ALWAYS written, even if every demo fails to render. This is
-  the key robustness decision — do not couple json generation to demo execution.
-- The style-fingerprint assertion is an ARTIST-PROPERTY / rcParams check (spine lw, tick
-  font family/size). NEVER a pixel/PNG hash. It is BLOCKING (build fails). The thumbnail
-  PNG render is BEST-EFFORT / non-blocking (a failed PNG is cosmetic).
-- Determinism: `yp.save` output must be reproducible. Do NOT stamp wall-clock time. Stamp
-  only source path + git SHA (best-effort) + caller-supplied data hashes. For PDF, suppress
-  matplotlib's default `CreationDate`/`ModDate`.
-- Reuse existing helpers (`finish`, `get_config`, `_resolve_font_family`, the structural
-  assertion style of `tests/test_shared_statistical_style.py`). Layer + escape hatch; do
-  not rewrite Phase 0–2 code.
-- Solo maintainer / low ops: the build stays a simple, testable script — NOT a framework.
+- **Q1 severity (low-friction adoption):** ONLY **YP001 = ERROR** (the one unambiguous
+  fork signal — a locally-defined house-style function). **YP002, YP003, YP004, YP005 =
+  WARNING.** `main` exits nonzero only when an ERROR-level finding survives filtering, so
+  by default only YP001 blocks. Document that severity is configurable (a `--error CODE`
+  flag to promote a rule, or note it for a future config). Rationale: a lint that ERRORs on
+  every `figsize=`/`savefig` gets disabled; nudge broadly, block only on the clearest fork.
+- **Q2 ignore syntax:** keep `# yplot2: ignore` and `# yplot2: ignore=YP002,YP003`
+  (comma-separated). Do NOT use `# noqa:` (collides with ruff's own noqa handling).
+- **Q3 raw seaborn (YP006): OPT-IN ONLY.** YP006 is NOT in the default rule set; it fires
+  only when explicitly requested via `--select YP006`. yplot2 EMBRACES raw seaborn drawn
+  into a panel followed by `yp.finish(ax)` (the escape hatch), so flagging `sns.violinplot`
+  by default is both noisy and contrary to the design. Keep the rule defined + tested, but
+  excluded from the default set.
+- **Q4 YP001 curated names:** `publication_style_ax`, `format_small_plot`, `publication_style`,
+  `publication_scatter`, `publication_line`. EXACT-name match only (never substring/heuristic —
+  that is the top false-positive risk).
+- **Q5 directory excludes:** `check_paths` walks `**/*.py` but skips these dir names:
+  `__pycache__`, `.git`, `.venv`, `venv`, `build`, `dist`, `.eggs`, `.ipynb_checkpoints`,
+  `node_modules`, and any `*.egg-info`. Do not attempt to honor `.gitignore`.
 
 ---
 
-## Deferred to Phase 4 (do NOT build now)
+## Non-negotiable constraints
+- `yplot2/lint.py`'s OWN module body is **pure stdlib only**: `ast`, `re`, `sys`,
+  `pathlib`, `dataclasses`, `enum`, `argparse`. NO import of matplotlib / seaborn /
+  pandas / numpy and no import of sibling yplot2 modules IN lint.py itself.
+  NOTE (plan-critic): `import yplot2.lint` still executes `yplot2/__init__.py`, which
+  loads matplotlib — so lint is NOT matplotlib-free at runtime, and that is fine. The
+  meaningful, testable guarantee is **seaborn-free** (already enforced by
+  `tests/test_no_seaborn_import.py`). Do NOT write a matplotlib-free import test; the
+  step-1 check is seaborn blocked via `sys.modules['seaborn']=None` then import succeeds.
+- Do NOT regress the existing 285 tests. Keep the diff to Phase-4 lint files only:
+  `yplot2/lint.py`, `tests/test_lint.py`, a short README section, and (if needed) one
+  line in `[tool.ruff.lint.per-file-ignores]` / `[tool.coverage.report]`.
+- Do NOT run repo-wide `ruff format` or touch legacy files. Run ruff/mypy only on the
+  two new files.
+- The lint must NOT flag yplot2's own library code or correct yplot2 usage (see
+  acceptance tests). It is never run against `yplot2/` itself in CI.
 
-pytest-mpl visual regression (mention as future only); the `~/.claude` agent skill; the
-`yplot`→`yplot2` compat shim + atp-ttr-switch migration; the anti-fork lint;
-figure-templates; migrating the 11 `examples/` into capsule demos.
+## Ground truth (the habit we are killing)
+Derived from the two real per-paper modules:
+- `~/Dropbox/papers/2025_dms_vs_tmo_paper/dms_vs_tmo_paper/plotting.py`
+- `~/Dropbox/papers/2025-dms-3d-features/dms_3d_features/plotting.py`
 
----
+What is actually there (drives the rules):
+- Locally DEFINED house-style functions: `def publication_style_ax(...)`,
+  `def format_small_plot(...)`, plus `publication_scatter`, `publication_line`.
+- Inline `figsize=(2.0, 1.5)` (and `figsize=(10, 5)`, `(20, 4)`) literals passed to
+  `plt.subplots(...)` all over the figure functions, often with `dpi=200`.
+- `plt.subplots_adjust(left=0.3, bottom=0.21, top=0.98)` inside `format_small_plot`.
+- Palettes built from **named colors** (`{"A": "red", ...}`) and **RGBA tuples**
+  (`{"TMO": (0.70, 0.0, 0.0, 1.0)}`), passed to seaborn via a **variable** `palette=`.
+- Raw `sns.violinplot(...)` / `sns.boxplot(...)` / `sns.stripplot(...)` calls.
 
-## Module layout (new)
+IMPORTANT design fact confirmed by grep: these two files contain **no `#hex` literals**,
+pass `palette=` a *variable* (not an inline dict), and contain **no `savefig`**.
+Therefore the hex-palette rule (YP005) and the savefig rule (YP004) are *preventive*
+(they guard against the general anti-pattern) and will legitimately NOT fire on these
+two files. The rules that actually fire on the real files are **YP001, YP002, YP003**.
+Do not "fix" YP004/YP005 to fire on these files — that would raise false positives.
 
-```
-yplot2/
-  save.py                    # ~150  yp.save() + provenance helpers (PURE)
-  build.py                   # ~130  figure-regen CLI: python -m yplot2.build <dir> (PURE)
-  catalog_build/
-    __init__.py              # ~10   exports build_catalog(); no heavy imports
-    records.py               # ~90   CapsuleRecord dataclass + SCHEMA_VERSION + json (PURE)
-    collect.py               # ~150  pkgutil collector, sandboxed import, introspection (PURE)
-    fingerprint.py           # ~140  style-fingerprint gate + best-effort thumbnail (mpl)
-    build.py                 # ~150  orchestrator + CLI: python -m yplot2.catalog_build.build
-figures/
-  build.sh                   # template: regen figures + regen catalog (NOT python)
-  requirements.lock.template # per-paper pin recommendation (text, not code)
-.github/workflows/
-  catalog.yml                # CI: run catalog build (static + blocking fingerprint gate)
-```
+## Design
 
-`catalog_build` is a separate subpackage from the existing `catalog.py` decorator module —
-they coexist (`yplot2.catalog` = decorator, `yplot2.catalog_build` = build tooling).
+### Module: `yplot2/lint.py` (~240 lines, target <300)
+Pure stdlib. Public surface:
 
----
-
-## Style notes (call-outs against the standard)
-
-- `yplot2/style.py` is a legacy 1100-line file EXEMPT from the 300-line rule (out of scope;
-  do not touch beyond importing `finish` / `_resolve_font_family`). All NEW modules obey the
-  200–300 line target.
-- `save()` and CLI `main()` functions risk exceeding 30 lines from argument wiring — keep
-  them thin dispatchers that delegate to helpers (`_build_provenance`, `_png_metadata`,
-  `_pdf_metadata`, `_discover_targets`, `_run_target`). Flag any that creep over 30.
-- Keep every public function ≤4 positional params: `save(fig, path, *, source=None,
-  data_hashes=None, dpi=300)` — only `fig`, `path` positional, rest keyword-only.
-- pyproject: add the new modules to the coverage `include`/remove from `omit` as needed so
-  the ≥90% gate actually measures them; subprocess/CLI glue that cannot be unit-tested must
-  be marked `# pragma: no cover` sparingly and kept to a few lines.
-
----
-
-## Toolchain (run before declaring done)
-
-```bash
-ruff check --fix yplot2 tests
-ruff format yplot2 tests
-mypy yplot2 --ignore-missing-imports
-pytest --cov=yplot2 --cov-report=term-missing        # 186 existing MUST stay green
-rm -rf build/                                          # housekeeping (Task 8)
-python -m yplot2.catalog_build.build --out-dir catalog # smoke: writes catalog.json + CATALOG.md
-```
-
----
-
-## Ordered tasks
-
-### Task 1 — `yplot2/save.py`: provenance-stamping save (PURE module)
-
-Files: `yplot2/save.py` (new), `yplot2/__init__.py` (export), `tests/test_save.py` (new).
-
-Public API:
 ```python
-def save(
-    fig: "matplotlib.figure.Figure",
-    path: str | os.PathLike[str],
-    *,
-    source: str | None = None,
-    data_hashes: dict[str, str] | None = None,
-    dpi: int = 300,
-) -> None:
-    """Save fig with enforced dpi + white facecolor and stamped provenance.
+from dataclasses import dataclass
+from enum import Enum
 
-    Format is inferred from the path suffix (.png or .pdf). Provenance —
-    the source script path, best-effort git SHA, and optional data hashes —
-    is written into the image metadata (PNG tEXt chunks / PDF info dict).
-    Output is deterministic: no wall-clock time is stamped.
-    """
-```
+class Level(str, Enum):
+    """Severity of a lint finding."""
+    ERROR = "error"      # exit nonzero
+    WARNING = "warning"  # reported, does not fail the run
 
-Helpers (each ≤30 lines, one responsibility):
-- `_git_sha(start_dir: str) -> str | None` — best-effort `git -C <dir> rev-parse HEAD` via
-  `subprocess.run` with a short timeout; return `None` on any failure (not a repo, no git,
-  timeout). MUST NOT raise. Optionally append `"-dirty"` if `git status --porcelain` is
-  non-empty (nice-to-have; keep simple if it pushes complexity over 10).
-- `_resolve_source(source: str | None) -> str` — `source` if given, else `sys.argv[0]`
-  (graceful `"unknown"` when empty). Recommend callers pass a repo-relative path.
-- `_build_provenance(source, data_hashes) -> dict[str, str]` — assemble ordered dict:
-  `{"yplot2_source": <src>, "yplot2_git_sha": <sha or "unknown">, "yplot2_version":
-  yplot2.__version__, "yplot2_data_hashes": <"k=v;..." or "">}`. Deterministic ordering.
-- `_png_metadata(prov) -> dict[str, str]` — map provenance into PNG text keys: put the
-  human summary under `"Software"`/`"Comment"` plus each `yplot2_*` key verbatim (matplotlib
-  PNG backend writes arbitrary dict keys as tEXt chunks; PNG adds no date by default).
-- `_pdf_metadata(prov) -> dict[str, str | None]` — map into PDF info keys
-  (`Creator`/`Subject`/`Keywords`), AND set `"CreationDate": None` and `"ModDate": None`
-  to suppress matplotlib's default wall-clock stamps (determinism).
-- `save()` body: set `fig.set_facecolor("white")`, pick metadata builder by suffix (raise
-  `ValueError` on an unsupported suffix listing `.png/.pdf`), call
-  `fig.savefig(path, dpi=dpi, facecolor="white", metadata=<...>)`.
-
-Export: add `save` to the imports and `__all__` in `yplot2/__init__.py` (near `finish`).
-Confirm `save.py` imports NOTHING heavy at module top (only `os`, `sys`, `subprocess`,
-`typing`; import `yplot2.__version__` lazily inside `_build_provenance` or via
-`from . import __version__` guarded to avoid a cycle — prefer reading `__version__` lazily).
-
-Acceptance tests (`tests/test_save.py`):
-- `test_save_png_roundtrips_provenance`: save to a tmp `.png` with
-  `source="figures/fig1.py"`, `data_hashes={"counts": "abc123"}`; read the file BYTES and
-  assert `b"figures/fig1.py"` and `b"abc123"` and `b"yplot2_git_sha"` appear (PNG tEXt is
-  literal ASCII — dependency-free round-trip).
-- `test_save_pdf_roundtrips_provenance`: same for `.pdf`; assert the source substring is in
-  the bytes AND assert NO literal wall-clock date leaked (assert the metadata builder set
-  `CreationDate`/`ModDate` to `None` — unit-test `_pdf_metadata` directly for this).
-- `test_save_sets_white_facecolor`: after `save()`, `fig.get_facecolor()` == white
-  (`(1.0, 1.0, 1.0, 1.0)`).
-- `test_save_deterministic`: save the same fig twice to two paths; assert the two files are
-  byte-identical (proves no wall-clock stamp).
-- `test_save_unsupported_suffix_raises`: `.svg` path → `ValueError` mentioning `.png/.pdf`.
-- `test_git_sha_graceful_outside_repo`: `_git_sha(tmp_path)` (a fresh non-repo dir) returns
-  `None` without raising.
-- `test_save_exported`: `import yplot2; assert callable(yplot2.save)`.
-- Verify: ruff complexity ≤10 on every helper.
-
-### Task 2 — `yplot2/build.py`: one-command figure-regen CLI (PURE module)
-
-Files: `yplot2/build.py` (new), `tests/test_build.py` (new).
-
-Purpose: `python -m yplot2.build <dir>` regenerates every figure in a directory by running
-each `*.py` script AND executing each `*.ipynb` notebook headless from a CLEAN kernel.
-
-API:
-```python
 @dataclass(frozen=True)
-class BuildResult:
-    """Outcome of regenerating one figure target."""
-    target: str          # path
-    ok: bool
-    stderr: str          # captured on failure (empty on success)
+class Finding:
+    """One anti-pattern occurrence in a source file."""
+    path: str      # file path as given/resolved
+    line: int      # 1-based line number of the triggering node
+    code: str      # e.g. "YP002"
+    message: str   # human message incl. the yplot2 replacement
+    level: Level
 
-def discover_targets(directory: str) -> list[str]:
-    """Return sorted .py and .ipynb figure targets under *directory* (non-recursive)."""
+def check_source(source: str, path: str) -> list[Finding]:
+    """Parse *source* and return findings for *path* (ignore comments applied)."""
 
-def run_script(path: str) -> BuildResult:
-    """Execute a .py figure script in a fresh subprocess."""
+def check_file(path: str | Path) -> list[Finding]:
+    """Read and lint a single .py file. Syntax errors -> single YP000 WARNING."""
 
-def run_notebook(path: str) -> BuildResult:
-    """Execute a notebook in place headless via `jupyter nbconvert --execute --inplace`."""
-
-def build(directory: str) -> list[BuildResult]:
-    """Regenerate all figure targets in *directory*; return per-target results."""
+def check_paths(paths: Iterable[str | Path]) -> list[Finding]:
+    """Lint files and/or directories (dirs walked for **/*.py). Sorted output."""
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: `python -m yplot2.build <dir>`. Returns process exit code."""
+    """CLI entry: `python -m yplot2.lint [--select C,..] [--ignore C,..] <paths...>`.
+    Returns 1 if any ERROR-level finding survives filtering, else 0."""
 ```
 
-Notes:
-- Notebook execution uses `jupyter nbconvert --execute --inplace --to notebook <path>` via
-  `subprocess.run`. If `jupyter`/`nbconvert` is absent, `run_notebook` returns a FAILED
-  `BuildResult` with a clear "install nbconvert" message rather than raising.
-  (Recommend nbconvert over papermill — fewer deps; see open questions.)
-- `run_script` uses `[sys.executable, path]` in a fresh subprocess (clean interpreter).
-- `main` prints a per-target PASS/FAIL summary and returns `1` if any target failed, else `0`.
-- Keep `subprocess.run(...)` calls behind the small `run_*` helpers so tests can monkeypatch
-  them. `main` itself stays a thin dispatcher (≤30 lines).
-- `python -m yplot2.build` works because `build.py` ends with
-  `if __name__ == "__main__": raise SystemExit(main())`.
+Internal structure (each helper ≤30 lines, complexity ≤10):
+- Module-level `RULES: dict[str, tuple[Level, str]]` mapping code -> (level, message).
+  Single source of truth for severity + message text.
+- Module-level `_HOUSE_STYLE_FUNCS: frozenset[str]` = the curated house-style function
+  names (see YP001). Curated names only — do NOT flag by heuristic/substring, that is
+  the main false-positive risk.
+- `_PLT_FIGURE_CALLERS: frozenset[str]` = `{"plt.subplots", "plt.figure",
+  "plt.subplot", "pyplot.subplots", "pyplot.figure"}` — dotted callee strings that YP002
+  restricts itself to.
+- `_HEX_RE = re.compile(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?(?:[0-9a-fA-F]{2})?$")`.
+- `class _RuleVisitor(ast.NodeVisitor)`: holds `self.findings: list[Finding]` and
+  `self.path`. Methods: `visit_FunctionDef` / `visit_AsyncFunctionDef` (YP001),
+  `visit_Call` (YP002, YP003, YP004, YP005-on-`palette=`, YP006), `visit_Dict` (YP005
+  standalone dict literals). Each `visit_*` appends via a small `self._add(node, code)`
+  helper that looks up level+message from `RULES` and uses `node.lineno`. Always call
+  `self.generic_visit(node)` to keep descending.
+- `_dotted_name(node: ast.expr) -> str | None`: resolve `ast.Attribute`/`ast.Name`
+  chains to a dotted string (`plt.subplots`, `fig.savefig`, `sns.violinplot`) so rules
+  match on the tail (`.savefig`, `.subplots_adjust`) or full dotted name. Returns None
+  for non-name callees.
+- `_is_hex_palette_dict(node: ast.Dict) -> bool`: True iff ≥2 values are string
+  constants matching `_HEX_RE`. (≥2 avoids flagging a lone `"#000"` used as one color.)
+- Ignore handling: `_apply_ignores(findings, source) -> list[Finding]` splits `source`
+  into lines once and drops any finding whose line carries the ignore marker.
+- Selection: `_filter_codes(findings, select, ignore) -> list[Finding]`.
+- Formatting: `_format(finding) -> str` -> `"{path}:{line}: {CODE} [{level}] {message}"`.
+- CLI: `_parse_args(argv)` (plain, no argparse subcommands needed — argparse is stdlib
+  and fine) returning `(paths, select, ignore)`; `main` orchestrates and prints.
 
-Acceptance tests (`tests/test_build.py`):
-- `test_discover_targets_sorted`: tmp dir with `b.py`, `a.py`, `c.ipynb`, `notes.txt` →
-  returns `[a.py, b.py, c.ipynb]` (sorted, txt excluded).
-- `test_run_script_success` / `test_run_script_failure`: write a trivial script that exits
-  0 / raises; assert `BuildResult.ok` and stderr capture.
-- `test_run_notebook_missing_tool_graceful`: monkeypatch `subprocess.run` to raise
-  `FileNotFoundError` → returns a FAILED result, no exception.
-- `test_build_aggregates_and_main_exit_code`: mix a passing + failing script; `build()`
-  returns both; `main([dir])` returns `1`.
-- Mark any un-unit-testable subprocess line `# pragma: no cover` sparingly.
+### The rule set (codes, triggers, level, message)
 
-### Task 3 — `catalog_build/records.py`: record model + JSON schema (PURE)
+| Code  | Level   | AST trigger | Message (points to replacement) |
+|-------|---------|-------------|---------------------------------|
+| YP001 | ERROR   | `FunctionDef`/`AsyncFunctionDef` whose `name` is in `_HOUSE_STYLE_FUNCS` | `defines house-style function '{name}()' — use yp.finish(ax) / yp.apply_style() instead` |
+| YP002 | WARNING | `Call` whose dotted callee is in `_PLT_FIGURE_CALLERS` AND has a `figsize=` keyword whose value is a `Tuple`/`List` literal | `inline figsize on plt.subplots/plt.figure — use yp.subplots(subplotsize=...) or yp.figure7()` |
+| YP003 | WARNING | `Call` whose dotted callee ends in `.subplots_adjust` (or bare `subplots_adjust`) | `manual subplots_adjust — use yp absolute layout (yp.subplots / yp.figure7)` |
+| YP004 | WARNING | `Call` whose dotted callee ends in `.savefig` (`plt.savefig`, `fig.savefig`) | `raw savefig loses provenance — use yp.save(fig, path, source=...)` |
+| YP005 | WARNING | `Dict` literal with ≥2 hex-string values, OR a `palette=` keyword whose value is such a `Dict` | `hardcoded hex color palette — use yp.palette()` |
+| YP006 | WARNING | `Call` whose dotted callee is `sns.violinplot` / `sns.boxplot` / `sns.stripplot` | `raw seaborn plot — prefer yp.boxplot()/yp wrappers, then yp.finish(ax)` |
 
-Files: `yplot2/catalog_build/__init__.py`, `yplot2/catalog_build/records.py`,
-`tests/test_catalog_records.py`.
+`_HOUSE_STYLE_FUNCS` (YP001, curated exact names): `publication_style_ax`,
+`format_small_plot`, `publication_style`, `publication_scatter`, `publication_line`.
+Curated-name matching only — no substring/prefix heuristics.
 
-```python
-SCHEMA_VERSION = 1
+Severity rationale (per authoritative Q1 — low-friction adoption):
+- **ERROR** (fails the run): **YP001 only** — a locally-defined house-style function is
+  the one unambiguous fork signal.
+- **WARNING** (reported, exit 0): YP002, YP003, YP004, YP005 — real nudges, but common
+  enough in legit exploratory code that blocking on them gets the lint disabled.
+- **Opt-in only (not in default set):** YP006 — fires solely under `--select YP006`.
+- `RULES` maps YP002/YP003/YP004/YP005 → WARNING and YP001 → ERROR (single source of truth).
+- Define `_OPT_IN = frozenset({"YP006"})`. `check_source` returns RAW findings for all rules
+  (incl. YP006). Default exclusion of opt-in codes happens in `main`/`_filter_codes`: a code
+  in `_OPT_IN` is dropped UNLESS it appears in an explicit `--select`. `main` exits nonzero
+  only if a surviving finding is ERROR-level (i.e. only YP001 by default).
 
-@dataclass(frozen=True)
-class CapsuleRecord:
-    """Static, render-free description of one @catalog capsule."""
-    name: str            # fn.__name__
-    category: str        # from __yp_catalog__["category"]
-    tags: tuple[str, ...]
-    data_shape: str
-    kind: str
-    signature: str       # str(inspect.signature(fn))
-    inputs: tuple[str, ...]   # parameter names excluding leading 'ax'/'self'
-    summary: str         # first non-blank line of fn.__doc__ ("" if none)
-    source_path: str     # inspect.getsourcefile(fn), repo-relative if possible
-    import_path: str     # f"{fn.__module__}.{fn.__name__}"
-    has_demo: bool       # sibling demo_<name> exists in the module
+False-positive guards baked into triggers:
+- YP002 is restricted to `plt.`/`pyplot.` callers, so `yp.subplots(subplotsize=(2,1.5))`
+  (different kwarg) and `yp.figure7(...)` never match; a `figsize=` passed to any yplot2
+  function never matches.
+- YP001 matches only the curated name set, never arbitrary `def apply_style` in yplot2's
+  own source (and the lint is never run on `yplot2/`).
+- YP005 requires ≥2 hex string values, so the named-color/RGBA-tuple palettes in the real
+  files do not trip it, and a single stray hex constant does not either.
+- YP006 is the lowest-confidence rule; document that teams commonly `--ignore YP006`.
 
-def record_to_dict(rec: CapsuleRecord) -> dict[str, object]: ...
-def catalog_to_json(records: Sequence[CapsuleRecord]) -> str:
-    """Serialize records to deterministic pretty JSON with a top-level
-    {"schema_version": SCHEMA_VERSION, "capsules": [...]} shape, sorted by
-    (category, name), indent=2, trailing newline."""
+### Ignore mechanism
+1. Inline comment on the triggering line:
+   - `# yplot2: ignore` suppresses ALL codes on that line.
+   - `# yplot2: ignore=YP002` (comma-separated codes) suppresses only those codes.
+   Implemented in `_apply_ignores` via a small regex on the finding's source line
+   (`re.search(r"#\s*yplot2:\s*ignore(=([A-Z0-9,]+))?", line)`); no tokenize needed.
+2. CLI `--select YP001,YP002` (allowlist) and `--ignore YP003,YP006` (denylist) applied
+   in `_filter_codes`. `--select` given -> keep only those codes; `--ignore` removes
+   codes; if both given, `--select` first then `--ignore`.
+
+### CLI behavior
+- `python -m yplot2.lint <paths...>`: prints one `_format(...)` line per surviving
+  finding (sorted by path, then line, then code); prints nothing on a clean run.
+- Exit code 1 iff any surviving finding has `level == Level.ERROR`; else 0. Warnings
+  alone do not fail the run.
+- No paths given -> print usage to stderr, return 1 (mirror `build.py`).
+- A file that fails to parse -> one `YP000` WARNING (`syntax error: {msg}`); never crash.
+- `if __name__ == "__main__": raise SystemExit(main())` (mirror `build.py`).
+
+## Style notes
+- Follows `~/.claude/standards/python-style.md`: full type hints + Args/Returns/Raises
+  docstrings on every function; ≤4 positional params (use keyword-only where natural);
+  early returns; ≤3 nesting depth; complexity ≤10.
+- Likely-longest functions to watch (keep ≤30 lines / complexity ≤10 by extracting
+  helpers): `visit_Call` (four rules) — split per-rule logic into
+  `_check_figsize(call)`, `_check_savefig(call)`, `_check_subplots_adjust(call)`,
+  `_check_seaborn(call)`, `_check_palette_kw(call)` each returning `str | None` code, so
+  `visit_Call` is a short dispatch loop. `main` stays a thin orchestrator.
+- Module size: ~240 lines projected. RISK: with six rules + CLI + docstrings it may
+  approach 300. If it exceeds 300, extract the CLI (`_parse_args`, `_format`, `main`)
+  into the same file is still fine per the "length is a smell not a limit" guidance —
+  do NOT split into a second module unless it genuinely passes 300 and reads better
+  split; if so, move the rule visitor + `check_*` into `lint.py` and keep CLI there,
+  or factor pure helpers into a private `_lint_ast.py`. Prefer one module.
+
+## Files
+| File | Action | Lines Est. | What |
+|------|--------|------------|------|
+| `yplot2/lint.py` | create | ~240 | Findings, rules, AST visitor, ignore/select, CLI |
+| `tests/test_lint.py` | create | ~200 | Per-rule + ignore + select + CLI + no-false-positive tests |
+| `README.md` | edit | +~30 | "Anti-fork lint" section: usage + pre-commit + CI snippets |
+| `pyproject.toml` | edit (maybe) | +~2 | Only if coverage/ruff config needs the new files acknowledged |
+
+## Steps (ordered, each independently verifiable)
+
+1. [ ] **Skeleton + data model.** Add `Level`, `Finding`, `RULES`,
+   `_HOUSE_STYLE_FUNCS`, `_PLT_FIGURE_CALLERS`, `_HEX_RE`, and stub `check_source`/
+   `check_file`/`check_paths`/`main`. No rule logic yet.
+   - Verify: `python -c "import yplot2.lint"` works with seaborn blocked
+     (`python -c "import sys; sys.modules['seaborn']=None; import yplot2.lint"`).
+   - Verify: mypy clean on `yplot2/lint.py`.
+
+2. [ ] **AST helpers.** Implement `_dotted_name`, `_is_hex_palette_dict`, and the
+   `_RuleVisitor` scaffold with `_add` + `generic_visit`.
+   - Test: `test_dotted_name_resolves_plt_subplots`, `test_dotted_name_none_for_call`.
+
+3. [ ] **YP001 — house-style function definitions.**
+   `visit_FunctionDef`/`visit_AsyncFunctionDef`.
+   - Test: `test_yp001_flags_publication_style_ax`,
+     `test_yp001_flags_format_small_plot`, `test_yp001_ignores_ordinary_def`.
+
+4. [ ] **YP002 — inline figsize on plt callers.** `_check_figsize`.
+   - Test: `test_yp002_flags_plt_subplots_figsize`,
+     `test_yp002_not_flag_yp_subplots_subplotsize` (correct usage, no finding),
+     `test_yp002_not_flag_figure7`.
+
+5. [ ] **YP003/YP004/YP006 — attribute-call rules.** `_check_subplots_adjust`,
+   `_check_savefig`, `_check_seaborn`; wire the `visit_Call` dispatch loop.
+   - Test: `test_yp003_flags_subplots_adjust` (WARNING), `test_yp004_flags_savefig`
+     (WARNING level), `test_yp006_flags_sns_violinplot` — YP006 is opt-in, so this test
+     must enable it (call `check_source` then filter with `select={"YP006"}`, or assert
+     YP006 is in the RAW `check_source` output). YP006 must NOT appear in a default `main` run.
+
+6. [ ] **YP005 — hex palettes.** `_check_palette_kw` + `visit_Dict`.
+   - Test: `test_yp005_flags_hex_dict`, `test_yp005_not_flag_named_color_dict`
+     (the real-file pattern `{"A": "red"}` must NOT fire),
+     `test_yp005_not_flag_single_hex`.
+
+7. [ ] **Ignore + selection.** `_apply_ignores`, `_filter_codes`; wire into
+   `check_source`.
+   - Test: `test_ignore_all_on_line`, `test_ignore_specific_code`,
+     `test_select_keeps_only_listed`, `test_ignore_removes_code`.
+
+8. [ ] **File / path plumbing + syntax error handling.** `check_file`, `check_paths`
+   (dir walk `**/*.py`, sorted), YP000 on `SyntaxError`. `check_paths` MUST skip the Q5
+   exclude dirs: `__pycache__`, `.git`, `.venv`, `venv`, `build`, `dist`, `.eggs`,
+   `.ipynb_checkpoints`, `node_modules`, and any `*.egg-info`.
+   - Test: `test_check_file_reads_source` (tmp_path),
+     `test_check_paths_walks_directory` (tmp_path with nested .py),
+     `test_check_paths_skips_excluded_dirs` (a .py under `build/` and `.venv/` is NOT linted),
+     `test_syntax_error_yields_yp000_warning`.
+
+9. [ ] **CLI `main`.** `_parse_args`, `_format`, exit-code logic, usage message,
+   `__main__` guard. Exits nonzero ONLY on a surviving ERROR (YP001 by default).
+   - Test: `test_main_exit_1_on_error` (source with **YP001** — the only default ERROR),
+     `test_main_exit_0_on_warning_only` (source with only YP002/YP003 → exit 0),
+     `test_main_yp006_absent_by_default` and `test_main_yp006_present_with_select`,
+     `test_main_no_paths_usage_returns_1`,
+     `test_main_clean_source_returns_0`.
+
+10. [ ] **Integration acceptance tests.** One "bad" plotting.py source string built from
+    the real anti-patterns (defines `publication_style_ax` + `format_small_plot`, calls
+    `plt.subplots(figsize=(2.0,1.5), dpi=200)`, calls `plt.subplots_adjust(...)`, calls
+    `sns.violinplot(...)`) → a DEFAULT `check_source` asserts YP001×2, YP002, YP003 present
+    and **YP006 ABSENT** (opt-in); a second assert with `select={"YP006"}` shows YP006 fires.
+    One "good" yplot2 script string (`import yplot2 as yp; fig, ax = yp.subplots(subplotsize=(2,1.5));
+    yp.finish(ax); yp.save(fig, "f.png", source=__file__)`) → asserts ZERO findings.
+    - Test: `test_bad_plotting_triggers_expected_codes` (YP006 absent by default),
+      `test_yp006_fires_only_with_select`,
+      `test_good_yplot2_script_is_clean`.
+
+11. [ ] **Docs snippet in README.md.** Add an "Anti-fork lint" section:
+    `python -m yplot2.lint <paths>`, the `--select/--ignore` and `# yplot2: ignore`
+    mechanisms, a `.pre-commit-config.yaml` hook snippet, and a GitHub Actions step.
+    Explicitly note it is for **paper repos**, not enforced on yplot2 itself, and that
+    YP006 (raw seaborn) is OPT-IN — add `--select YP001,YP002,YP003,YP004,YP005,YP006` to
+    also flag raw seaborn; the default set intentionally allows raw seaborn + `yp.finish`.
+    - Verify: snippets are copy-paste correct (hook `entry: python -m yplot2.lint`,
+      `language: system`, `types: [python]`).
+
+12. [ ] **Toolchain gate (new files only).**
+    - `ruff check yplot2/lint.py tests/test_lint.py` (and `ruff format` on just these two).
+    - `mypy yplot2/lint.py --ignore-missing-imports`.
+    - `pytest tests/test_lint.py --cov=yplot2/lint.py --cov-report=term-missing` → ≥90%.
+    - `pytest` (full suite) → still 285 passing + the new tests; no regressions.
+    - Confirm `yplot2/lint.py` is NOT added to the coverage `omit` list (it must count).
+
+## Ready-to-use snippets to include in README (for the plan's docs step)
+
+Pre-commit (`.pre-commit-config.yaml` in a paper repo):
+```yaml
+-   repo: local
+    hooks:
+    -   id: yplot2-anti-fork
+        name: yplot2 anti-fork lint
+        entry: python -m yplot2.lint
+        language: system
+        types: [python]
+        # optional: keep raw seaborn allowed
+        args: ["--ignore", "YP006"]
 ```
 
-Pure: only `dataclasses`, `json`, `typing`, `collections.abc`. No matplotlib import.
-
-Acceptance tests: round-trip a hand-built record → dict has all fields; `catalog_to_json`
-output parses back, contains `schema_version==1`, capsules sorted by `(category, name)`,
-and is byte-stable across two calls (determinism).
-
-### Task 4 — `catalog_build/collect.py`: pkgutil collector (PURE, sandboxed)
-
-Files: `yplot2/catalog_build/collect.py`, `tests/test_catalog_collect.py`.
-
-```python
-@dataclass(frozen=True)
-class ImportFailure:
-    """A module that could not be imported during collection."""
-    module: str
-    error: str
-
-def collect_records() -> tuple[list[CapsuleRecord], list[ImportFailure]]:
-    """Walk the yplot2 package and return (capsule records, import failures).
-
-    Uses pkgutil.walk_packages over yplot2.__path__ (NEVER a filesystem glob),
-    imports each submodule in a try/except sandbox (a failing import becomes an
-    ImportFailure, never aborts the walk), and extracts CapsuleRecords from every
-    module-level function carrying __yp_catalog__.
-    """
+CI (GitHub Actions step):
+```yaml
+      - name: yplot2 anti-fork lint
+        run: python -m yplot2.lint src/ figures/
 ```
 
-Helpers:
-- `_iter_module_names() -> Iterator[str]` — `pkgutil.walk_packages(yplot2.__path__,
-  prefix="yplot2.")`, yielding `mod.name`. Because it walks `__path__` (the installed
-  package location), the `build/lib/yplot2` shadow is never reachable.
-- `_safe_import(name) -> tuple[ModuleType | None, ImportFailure | None]` — try/except; on
-  ANY exception (incl. missing optional dep) return an `ImportFailure`. Importing a capsule
-  module is seaborn-free (decorator runs without seaborn), so this rarely fails — but stay
-  defensive.
-- `_records_from_module(module) -> list[CapsuleRecord]` — `inspect.getmembers(module,
-  inspect.isfunction)`, keep fns where `getattr(fn, "__yp_catalog__", None)` is set AND
-  `fn.__module__ == module.__name__` (avoid double-counting re-imported names). Build a
-  record via `_build_record(fn, module)`.
-- `_build_record(fn, module) -> CapsuleRecord` — pull `__yp_catalog__`, `inspect.signature`,
-  param names (drop a leading `ax`/`self`), docstring first line, `inspect.getsourcefile`
-  (make repo-relative via `os.path.relpath` against `yplot2` package root, best-effort),
-  and `has_demo = hasattr(module, f"demo_{fn.__name__}")`.
+## Test mocking / fixtures
+- No mocking of matplotlib/seaborn — everything is exercised through `check_source`
+  with inline source strings, so tests need zero heavy deps and run fast.
+- `tmp_path` only for `check_file` / `check_paths` directory-walk tests.
+- Do NOT create fixture `.py` files under a collected test path (they would be linted by
+  ruff/pytest); use inline triple-quoted source instead.
 
-Static only — NEVER calls a demo.
+## Reviewer notes
+- Confirm `yplot2/lint.py` imports nothing heavy (grep the import block; only stdlib).
+- Confirm running the lint on `yplot2/` source is NOT part of CI and that the acceptance
+  "good script" test proves correct yplot2 usage yields zero findings.
+- Confirm ERROR vs WARNING mapping matches the table and that exit code is driven only by
+  ERROR-level survivors after ignore/select filtering.
+- Confirm diff is limited to the four files above; no legacy files reformatted.
 
-Acceptance tests (`tests/test_catalog_collect.py`):
-- `test_collects_five_statistical_capsules`: `records, failures = collect_records()`;
-  assert names ⊇ {violin, box, kde, heatmap2d, hexbin}, each `category=="statistical"`,
-  `has_demo is True`.
-- `test_collect_is_seaborn_free`: run `collect_records()` in a subprocess with
-  `sys.modules['seaborn']=None` (mirror `test_no_seaborn_import.py`); assert it still finds
-  all five (proves static collection needs no seaborn).
-- `test_collector_skips_build_shadow`: assert no record's `source_path` contains
-  `"build/lib"` and no module name repeats.
-- `test_import_failure_is_captured_not_raised`: monkeypatch `_safe_import` (or inject a
-  deliberately broken temp module on a patched `__path__`) so one module raises; assert it
-  lands in `failures` and the walk still returns the good records.
-- `test_signature_and_inputs_extracted`: violin record `signature` contains `"data"`,
-  `inputs` excludes `"ax"`.
-
-### Task 5 — `catalog_build/fingerprint.py`: BLOCKING style gate + best-effort thumbnail
-
-Files: `yplot2/catalog_build/fingerprint.py`, `tests/test_catalog_fingerprint.py`.
-
-```python
-@dataclass(frozen=True)
-class StyleViolation:
-    """One artist-property mismatch found on a demo figure."""
-    axes_index: int
-    prop: str            # e.g. "spine_linewidth", "tick_font_family"
-    expected: str
-    actual: str
-
-def check_house_style(fig: "Figure") -> list[StyleViolation]:
-    """Assert house chrome on every axes of a rendered demo figure.
-
-    Artist-property checks ONLY (never a pixel hash): each visible spine's
-    linewidth == cfg.axis_linewidth; every tick label's font family == the
-    resolved house font (Arimo); tick-label fontsize == cfg tick fontsize.
-    Returns an empty list when the figure is house-styled.
-    """
-
-def render_thumbnail(fig: "Figure", path: str) -> bool:
-    """Best-effort thumbnail PNG. Returns True on success, False on any failure
-    (never raises — a failed thumbnail is cosmetic, not a gate)."""
-
-def fingerprint_capsule(rec: CapsuleRecord) -> "FingerprintResult":
-    """Import rec's module, run its demo, style-check it, and (best-effort)
-    write a thumbnail. Returns a result carrying violations + thumbnail status.
-    A demo that raises yields a result with a populated `error` (blocking)."""
-```
-
-Details:
-- Read expected values via `from yplot2.config import get_config` and
-  `from yplot2.style import _resolve_font_family` — do NOT hard-code `0.75`/`"Arimo"`.
-- `check_house_style` iterates `fig.axes`; for each, checks visible spines'
-  `get_linewidth()`, and `get_xticklabels()/get_yticklabels()` `get_fontname()` +
-  `get_fontsize()`. Use a small tolerance (`1e-6`) on floats. Skip empty/label-less axes
-  (a demo axes with no ticks is fine — only assert on ticks that exist).
-- `fingerprint.py` imports matplotlib (fine — not seaborn). Running a demo may pull seaborn
-  LAZILY; guard with `try/except ImportError` → the result records "seaborn missing" as a
-  SKIP (not a violation) so a `[stats]`-less environment does not falsely fail the gate.
-  (A cataloged capsule whose demo needs seaborn is only fingerprinted in the `[stats]` build
-  step — see open questions on whether missing-seaborn is a skip or a hard fail in CI.)
-- `render_thumbnail` wraps `fig.savefig(path, dpi=72)` in try/except → bool.
-
-`FingerprintResult` dataclass: `name: str`, `violations: tuple[StyleViolation, ...]`,
-`thumbnail_ok: bool`, `error: str` (demo crash message; `""` if it ran), `skipped: bool`
-(seaborn absent). `blocking_failed` property = `bool(error) or bool(violations)` and NOT
-`skipped`.
-
-Acceptance tests (`tests/test_catalog_fingerprint.py`):
-- `test_styled_demo_passes`: build the five statistical records (or a fixture), run
-  `fingerprint_capsule`; `pytest.importorskip("seaborn")`; assert `violations == ()` and
-  `error == ""` for each renderable demo (the demos call `finish` → must be house-styled).
-- `test_unstyled_demo_flagged` (the BLOCKING-gate test): craft a local demo returning a bare
-  `plt.subplots()` axes with a plotted line and default matplotlib spines/fonts; call
-  `check_house_style(fig)` → assert it returns a NON-EMPTY list naming `spine_linewidth`
-  and/or `tick_font_family` (default spine 0.8 ≠ 0.75, DejaVu ≠ Arimo).
-- `test_thumbnail_failure_is_nonblocking`: monkeypatch `fig.savefig` to raise →
-  `render_thumbnail` returns `False`, no exception; and a `FingerprintResult` with a failed
-  thumbnail but no violations has `blocking_failed is False`.
-- `test_demo_crash_is_blocking`: a demo that raises → result `error` populated,
-  `blocking_failed is True`.
-- `test_missing_seaborn_is_skip_not_fail`: force `ImportError` from the demo → `skipped is
-  True`, `blocking_failed is False`.
-
-### Task 6 — `catalog_build/build.py`: orchestrator + CLI (json ALWAYS written)
-
-Files: `yplot2/catalog_build/build.py`, `tests/test_catalog_build.py`.
-
-```python
-@dataclass(frozen=True)
-class BuildReport:
-    """Summary of a catalog build."""
-    n_capsules: int
-    import_failures: tuple[ImportFailure, ...]
-    blocking_failures: tuple[str, ...]     # capsule names that failed the style gate
-    catalog_json_path: str
-    catalog_md_path: str
-
-def build_catalog(out_dir: str, *, strict: bool = True) -> BuildReport:
-    """Collect capsules, ALWAYS write catalog.json (static), then run the
-    fingerprint gate + best-effort thumbnails and write CATALOG.md.
-
-    Order guarantees catalog.json exists even if every demo fails. When strict
-    is True, a blocking fingerprint failure makes `main` exit non-zero; the
-    json + md are still written first.
-    """
-
-def _write_catalog_json(records, out_dir) -> str: ...
-def _write_catalog_md(records, results, out_dir) -> str: ...   # grouped by category
-def main(argv: list[str] | None = None) -> int:
-    """CLI: python -m yplot2.catalog_build.build --out-dir catalog [--no-strict].
-    Returns 1 if any blocking fingerprint failure occurred, else 0."""
-```
-
-Critical ordering (the robustness decision): `build_catalog` runs `collect_records()` →
-writes `catalog.json` IMMEDIATELY → THEN loops `fingerprint_capsule` over records with
-`has_demo` → writes `CATALOG.md` (embedding thumbnails that succeeded, skipping the rest).
-`catalog.json` is never gated on rendering.
-
-`_write_catalog_md`: group records by `category`; per capsule emit a heading with
-`import_path`, `tags`, `data_shape`, `summary`, and an `![](thumb)` line only if the
-thumbnail exists. Regenerated every build so it can't drift.
-
-Thumbnails written under `<out_dir>/thumbs/<name>.png`.
-
-`catalog_build/__init__.py` re-exports `build_catalog` and `BuildReport`; keep it light (no
-matplotlib import at package import — import `build` lazily or accept that importing the
-subpackage pulls matplotlib but NOT seaborn; add a test that importing `yplot2.catalog_build`
-does not import seaborn).
-
-Acceptance tests (`tests/test_catalog_build.py`):
-- `test_json_written_even_when_demo_fails` (static-index-survives-render-failure): monkeypatch
-  `fingerprint_capsule` to raise/return a blocking error for every capsule; call
-  `build_catalog(tmp, strict=False)`; assert `catalog.json` EXISTS, parses, has
-  `schema_version==1`, and lists ALL five statistical capsules. This is the headline test.
-- `test_strict_reports_blocking_failure`: with a monkeypatched blocking result,
-  `main(["--out-dir", tmp])` returns `1`; without, returns `0`.
-- `test_catalog_md_generated_and_grouped`: `CATALOG.md` exists, contains a `statistical`
-  section and each capsule's `import_path`.
-- `test_full_build_smoke` (guarded `pytest.importorskip("seaborn")`): real
-  `build_catalog(tmp)` → json + md + ≥1 thumbnail png written; report `blocking_failures`
-  empty (the five demos are house-styled).
-- `test_catalog_build_import_is_seaborn_free`: subprocess with `sys.modules['seaborn']=None`,
-  `import yplot2.catalog_build` → succeeds.
-
-### Task 7 — Wire into `figures/build.sh`, per-paper lockfile, and CI
-
-Files: `figures/build.sh` (new, template), `figures/requirements.lock.template` (new, text),
-`.github/workflows/catalog.yml` (new).
-
-`figures/build.sh` (documented template, not Python — a reviewer reads it as the CONVENTION):
-```bash
-#!/usr/bin/env bash
-# One-command regen for a paper's figures + the plot catalog.
-# Usage: bash figures/build.sh
-set -euo pipefail
-# 1. Regenerate every figure (scripts AND notebooks, clean kernel):
-python -m yplot2.build figures
-# 2. Regenerate the plot catalog (static json + blocking style gate + gallery):
-python -m yplot2.catalog_build.build --out-dir catalog
-```
-Add header comments: "Pin the environment first — see requirements.lock.template" and
-"'Raw data' means an analysis-ready dataframe; the fastq/BAM pipeline is OUT of scope."
-
-`figures/requirements.lock.template` (text): recommend per-paper pinning of `yplot2==`,
-`matplotlib==`, `seaborn==`, `nbconvert==` (comment that exact versions are filled in with
-`pip freeze` per paper).
-
-`.github/workflows/catalog.yml`: on push/PR, `pip install -e .[stats,dev]` + nbconvert,
-then `python -m yplot2.catalog_build.build --out-dir catalog` (the fingerprint gate is
-BLOCKING → CI fails on an unstyled cataloged demo; thumbnails best-effort). Keep it a
-single minimal job. Do NOT commit generated `catalog/` back in CI (just gate).
-
-Acceptance: `bash -n figures/build.sh` parses; the workflow YAML is valid
-(`python -c "import yaml,sys; yaml.safe_load(open('.github/workflows/catalog.yml'))"` — but
-yaml is a dev-only check; if PyYAML absent, just eyeball). No unit test required for these
-text artifacts beyond shellcheck-style parse.
-
-### Task 8 — Housekeeping: delete the on-disk build shadow + pyproject wiring
-
-Files: delete `build/`; edit `pyproject.toml`.
-
-- `rm -rf build/` (gitignored + untracked — safe; documented in the strategy as a required
-  housekeeping step so the collector cannot ever see it).
-- `pyproject.toml`: ensure NEW modules are measured by coverage — remove them from any
-  `[tool.coverage.report] omit` and confirm `--cov=yplot2` includes them; keep the ≥90%
-  target for new code. Add `nbconvert` to a new optional extra if you want notebook regen
-  installable (e.g. `repro = ["nbconvert>=7"]`) — OR leave nbconvert to the per-paper lock
-  (see open questions). Add ruff per-file-ignores only if genuinely needed (prefer none).
-
-Acceptance: full `pytest` run is green (186 existing + new), `mypy` clean on `yplot2`,
-`ruff check` clean, coverage ≥90% on the new modules.
-
----
-
-## Risks / uncertainties
-
-- **PNG/PDF metadata backend behavior** — matplotlib PNG writes dict keys as tEXt (no date);
-  PDF stamps `CreationDate`/`ModDate` from wall-clock unless suppressed. The plan suppresses
-  them via `metadata={"CreationDate": None, "ModDate": None}`; verify on the pinned mpl
-  3.10.x. If a backend rejects arbitrary keys, fall back to a single `"Comment"`/`"Subject"`
-  key holding the whole provenance string.
-- **Fingerprint on tick-less demo axes** — some demos (heatmap/hexbin) may hide ticks or use
-  a colorbar axes; `check_house_style` must skip axes with no tick labels rather than
-  false-fail. The tests must cover a colorbar/`imshow` demo.
-- **`inspect.getsourcefile` for installed (`pip install .`, non-editable) packages** returns
-  a site-packages path; repo-relative conversion is best-effort. Store the absolute path if
-  relpath fails; note this is acceptable (source_path is informational).
-- **Coverage of subprocess/CLI glue** in `build.py` — keep the subprocess calls in thin
-  helpers and unit-test the pure parts; a few `# pragma: no cover` lines are acceptable to
-  hold ≥90%.
-
----
-
-## Open design questions (resolve before plan-critic)
-
-1. **`yp.save` PDF determinism** — confirm `metadata={"CreationDate": None, "ModDate":
-   None}` fully suppresses wall-clock on pinned mpl 3.10.x, or do we set a FIXED epoch
-   (e.g. `SOURCE_DATE_EPOCH`-style) instead? (Plan assumes `None` suppresses.)
-2. **Source path form** — store `source` as caller-passed (recommend repo-relative) or force
-   `os.path.relpath` against the repo root? Absolute paths hurt cross-machine byte-identity
-   but the round-trip/determinism tests use same-machine. (Plan: store as given; recommend
-   relative in docs.)
-3. **Where do `catalog.json` + `CATALOG.md` live?** Plan writes them to a CLI `--out-dir`
-   (default `catalog/`). Strategy hints at a "committed static namespace file `__init__`
-   reads at runtime" — do we commit `catalog.json` into `yplot2/` and have `__init__` read
-   it now, or defer that runtime-read to Phase 4? (Plan defers the runtime-read; only
-   generates the files.)
-4. **Notebook execution tool** — `jupyter nbconvert --execute` (recommended, fewer deps) vs
-   `papermill` (parametrizable)? And do we add an optional `repro=["nbconvert"]` extra or
-   push it into the per-paper lockfile only? (Plan: nbconvert, extra optional.)
-5. **Is `python -m yplot2.build` worth it vs a plain `build.sh` loop?** Plan includes the
-   module because it is unit-testable and cross-platform; confirm you want the extra module.
-6. **Missing-seaborn in the CI fingerprint gate** — is a seaborn-backed demo that cannot run
-   (no `[stats]`) a SKIP (plan default, so a base-install CI stays green) or a HARD FAIL
-   (forcing `[stats]` in every catalog CI)? Plan treats it as a skip; CI installs `[stats]`
-   so the gate actually runs.
-7. **`differentiator=` dup-lint / `status` field** — the strategy's capsule-catalog section
-   mentions a dup-lint and active/deprecated status. Those read as Phase-4 curation. Confirm
-   they are OUT of Phase 3 (plan excludes them).
+## Open questions (flag for the user before/while coding)
+1. **ERROR vs WARNING split** — plan sets YP001/YP002/YP004 = ERROR (block) and
+   YP003/YP005/YP006 = WARNING. Is YP003 (`subplots_adjust`) strong enough to be an
+   ERROR, or is WARNING right? (Kept WARNING to avoid blocking legit manual layout.)
+2. **Ignore syntax** — plan uses `# yplot2: ignore` / `# yplot2: ignore=YP002`. Prefer
+   the ruff-style `# noqa: YP002` spelling instead, for muscle-memory familiarity?
+3. **YP006 (raw seaborn)** — included as an off-by-recommendation WARNING (docs suggest
+   `--ignore YP006`). Keep it in the default rule set, or make it opt-in via `--select`
+   only (i.e. excluded unless explicitly requested)?
+4. **YP001 name list** — include the thin wrappers `publication_scatter` /
+   `publication_line` (they reinvent `yp.scatter`/`yp.line`, not styling), or restrict
+   YP001 to the pure styling names and leave the wrappers alone?
+5. **Directory recursion** — `check_paths` walks dirs for `**/*.py`. Should it honor a
+   `.gitignore` / skip `build/`, `.venv/`, `__pycache__`? (Plan currently skips only
+   `__pycache__`; add more excludes if paper repos need it.)

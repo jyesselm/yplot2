@@ -732,3 +732,83 @@ fig.savefig("figure.png", dpi=300, bbox_inches="tight")
 - `structure_x_axis(ax, structure)` - Show dot-bracket structure on x-axis
 - `sequence_structure_x_axis(ax, sequence, structure)` - Show both (stacked)
 - `apply_x_axis_format(ax, sequence, structure, axis_type)` - Apply by name
+
+## Anti-fork lint
+
+`python -m yplot2.lint` is a pure-stdlib AST lint for **paper repos** that use yplot2.
+It flags patterns that re-invent what yplot2 already provides and points each finding at
+the yplot2 replacement. It is intentionally **not** run against yplot2 itself.
+
+The #1 design goal is **low false-positives** — a noisy lint gets disabled.
+
+### Rules
+
+| Code  | Level   | What it flags |
+|-------|---------|---------------|
+| YP001 | ERROR   | locally-defined house-style function (`publication_style_ax`, `format_small_plot`, `publication_style`, `publication_scatter`, `publication_line`) |
+| YP002 | WARNING | inline `figsize=` tuple/list on `plt.subplots` / `plt.figure` |
+| YP003 | WARNING | `plt.subplots_adjust(...)` — manual layout |
+| YP004 | WARNING | raw `fig.savefig(...)` / `plt.savefig(...)` |
+| YP005 | WARNING | dict literal with ≥2 hex-string values (hardcoded palette) |
+| YP006 | WARNING | raw `sns.violinplot` / `sns.boxplot` / `sns.stripplot` (opt-in only) |
+
+Only YP001 (ERROR) causes a nonzero exit by default, so it can be wired as a blocking
+pre-commit or CI check without disrupting exploratory scripts that use `figsize=` or
+`savefig`. YP006 (raw seaborn) is **opt-in only** — yplot2 supports raw seaborn drawn
+into a panel followed by `yp.finish(ax)`, so it is not flagged by default.
+
+### Usage
+
+```bash
+# Lint a directory tree
+python -m yplot2.lint src/ figures/
+
+# Only check specific rules
+python -m yplot2.lint --select YP001,YP002 src/
+
+# Suppress a rule
+python -m yplot2.lint --ignore YP003 figures/
+
+# Enable the opt-in raw-seaborn rule
+python -m yplot2.lint --select YP001,YP002,YP003,YP004,YP005,YP006 src/
+```
+
+### Inline suppression
+
+```python
+def publication_style_ax(ax):  # yplot2: ignore
+    ...
+
+fig, ax = plt.subplots(figsize=(2, 1.5))  # yplot2: ignore=YP002
+```
+
+### Pre-commit hook (paper repo `.pre-commit-config.yaml`)
+
+```yaml
+-   repo: local
+    hooks:
+    -   id: yplot2-anti-fork
+        name: yplot2 anti-fork lint
+        entry: python -m yplot2.lint
+        language: system
+        types: [python]
+        # optional: keep raw seaborn allowed (default)
+        args: ["--ignore", "YP006"]
+```
+
+### GitHub Actions step
+
+```yaml
+      - name: yplot2 anti-fork lint
+        run: python -m yplot2.lint src/ figures/
+```
+
+### Limitations
+
+The callee-set rules (YP002 for `figsize=`, YP006 for seaborn plots) match
+only the standard aliases `plt.`/`pyplot.` and `sns.`. Unusual import aliases
+(e.g. `import matplotlib.pyplot as mpl`) are intentionally not matched — this
+keeps false-positives near zero at the cost of missing the aliased form. If
+your paper repo uses a non-standard alias, add an explicit `--select` / annotation
+or rename the import to the conventional alias. Similarly, a bare `subplots()`
+from a `from matplotlib.pyplot import subplots` is not flagged by YP002.
